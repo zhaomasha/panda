@@ -1,5 +1,5 @@
-#include "panda_subgraph.hpp"
-//´´½¨Ò»¸ö×ÓÍ¼µÄÎÄ¼ş£¬³õÊ¼»¯´óĞ¡Îª16M
+ï»¿#include "panda_subgraph.hpp"
+//å°¼ç›å°¼ç›
     void Subgraph::init(string name){
 		filename=name;
 		char tmp[1024*1024*atoi(getenv("INITSZ"))];

@@ -1,21 +1,21 @@
 ï»¿#include "panda_subgraph.hpp"
-//å°¼ç›å°¼ç›
+//
     void Subgraph::init(string name){
 		filename=name;
 		char tmp[1024*1024*atoi(getenv("INITSZ"))];
-		//ÎÄ¼ş´æÔÚÔòÇåÁã£¬²»´æÔÚÔò´´½¨
+		//æ–‡ä»¶å­˜åœ¨åˆ™æ¸…é›¶ï¼Œä¸å­˜åœ¨åˆ™åˆ›å»º
 		io.open(filename.c_str(),fstream::out|fstream::in|ios::binary|fstream::trunc);
 		io.write(tmp,sizeof(tmp));
 	}
 	
-	//´´½¨×ÓÍ¼µÄÍ·£¬³õÊ¼»¯Ë÷Òı½á¹¹
+	//åˆ›å»ºå­å›¾çš„å¤´ï¼Œåˆå§‹åŒ–ç´¢å¼•ç»“æ„
 	void Subgraph::format(){
 		head.free_head=INVALID_BLOCK;
 		head.vertex_head=INVALID_BLOCK;		
 		head.vertex_tail=INVALID_BLOCK;		
 		head.vertex_num=0;
 		head.block_size=atoi(getenv("BLOCKSZ"));
-		//Ëã³öÎÄ¼ş´óĞ¡£¬¼ÆËã¿ÕÏĞ¿éµÄ´óĞ¡
+		//ç®—å‡ºæ–‡ä»¶å¤§å°ï¼Œè®¡ç®—ç©ºé—²å—çš„å¤§å°
 		io.seekg(0,fstream::end);
 		uint32_t file_len=io.tellg();
 		cout<<"filelen:"<<file_len<<endl;

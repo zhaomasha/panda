@@ -1,30 +1,39 @@
 ﻿#include "panda_subgraph.hpp"
-//
-    void Subgraph::init(string name){
-		filename=name;
-		char tmp[1024*1024*atoi(getenv("INITSZ"))];
-		//文件存在则清零，不存在则创建
-		io.open(filename.c_str(),fstream::out|fstream::in|ios::binary|fstream::trunc);
-		io.write(tmp,sizeof(tmp));
-	}
-	
-	//创建子图的头，初始化索引结构
-	void Subgraph::format(){
-		head.free_head=INVALID_BLOCK;
-		head.vertex_head=INVALID_BLOCK;		
-		head.vertex_tail=INVALID_BLOCK;		
-		head.vertex_num=0;
-		head.block_size=atoi(getenv("BLOCKSZ"));
-		//算出文件大小，计算空闲块的大小
-		io.seekg(0,fstream::end);
-		uint32_t file_len=io.tellg();
-		cout<<"filelen:"<<file_len<<endl;
-		head.free_num=(file_len-sizeof(SubgraphHeader))/head.block_size;
+//子图不存在时，新建一个子图文件，初始化为一定大小
+void Subgraph::init(string name){
+	filename=name;
+	char tmp[1024*1024*atoi(getenv("INITSZ"))];
+	//文件存在则清零，不存在则创建
+	io.open(filename.c_str(),fstream::out|fstream::in|ios::binary|fstream::trunc);
+	io.write(tmp,sizeof(tmp));
+}
 
-		cout<<"freenum:"<<head.free_num<<endl;
-		io.seekp(0);
-		io.write((char*)&head,sizeof(SubgraphHeader));
-		io.seekg(0);
-		io.read((char*)&head,sizeof(SubgraphHeader));			
-		cout<<"new  freenum:"<<head.free_num<<endl;	
+//格式化子图，创建子图的头，初始化索引结构等等
+void Subgraph::format(){
+	head.free_head=INVALID_BLOCK;
+	head.vertex_head=INVALID_BLOCK;		
+	head.vertex_tail=INVALID_BLOCK;		
+	head.vertex_num=0;
+	head.block_size=atoi(getenv("BLOCKSZ"));
+	//算出文件大小，计算空闲块的大小
+	io.seekg(0,fstream::end);
+	uint32_t file_len=io.tellg();
+	cout<<"filelen:"<<file_len<<endl;
+	head.free_num=0
+	uint32_t blocks=(file_len-sizeof(SubgraphHeader))/head.block_size;
+/*
+	cout<<"freenum:"<<head.free_num<<endl;
+	io.seekp(0);
+	io.write((char*)&head,sizeof(SubgraphHeader));
+	io.seekg(0);
+	io.read((char*)&head,sizeof(SubgraphHeader));			
+	cout<<"new  freenum:"<<head.free_num<<endl;*/
+	//把空闲的文件分成空闲块，然后串成一个空闲块链表，先用简单的链表形式做测试
+	int i;
+	for(i=0;i<blocks;i++){
+		//内存块首地址
+		block=(BlockHeader*)malloc(sizeof(BlockHeader));
+		block.data=block++;
 	}
+	  	
+}

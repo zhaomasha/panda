@@ -19,7 +19,7 @@ class Subgraph{
     string filename;//子图对应的文件名
 	fstream io;
 	SubgraphHeader head;
-	BlockHeader block;//只包含一个块做测试
+	BlockHeader *block;//只包含一个块做测试
 public:
 	//创建一个子图的文件，初始化大小为16M
     void init(string name);

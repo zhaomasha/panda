@@ -38,6 +38,7 @@ public:
 };
 
 //块的头部类
+template <typename T>
 class BlockHeader{
 	char type;//块的类型
 	b_type number;//块号
@@ -45,7 +46,7 @@ class BlockHeader{
 	b_type next;//后一个块
 	uint32_t capacity;//块的容量，边的个数或者顶点的个数
 	uint32_t size;//已经存取的数目
-	void *data;//块的数据
+	T *data;//块的数据
 };
 
 

@@ -11,6 +11,7 @@ public:
 	b_type vertex_tail;//顶点链表的尾指针
 	v_type vertex_num;//子图中顶点的数目
     	b_type free_num;//空闲块数目
+	b_type block_num;//块的总数目
     	uint32_t block_size;//该子图的block大小
 }__attribute__((packed));
 
@@ -22,9 +23,12 @@ class Subgraph{
 	BlockHeader<Edge> *block;//只包含一个块做测试
 public:
 	//创建一个子图的文件，初始化大小为16M
-        void init(string name);
+        void init(string filename);
 	//创建子图的头，初始化索引结构
-	void format();
+	void format(uint32_t blocksize=atoi(getenv("BLOCKSZ")));
+	f_type get_offset(b_type num);
+	void update_index();
+	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
 };
 
 

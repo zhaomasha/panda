@@ -4,5 +4,8 @@ int main()
 {
 	Subgraph s;
 	s.init("sd");
-	s.format();
+	s.add_file();
+	s.format(1024);
+	s.add_file();
+	s.update_index();
 }

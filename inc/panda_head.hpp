@@ -52,6 +52,7 @@ typedef uint64_t v_type;//顶点id的类型
 typedef uint32_t e_type;//边数目的类型
 typedef uint32_t b_type;//块id的类型
 typedef uint64_t t_type;//时间戳的类型
+typedef fstream::pos_type f_type;//文件偏移的类型
 static b_type const INVALID_BLOCK=~0U;
 #endif
 

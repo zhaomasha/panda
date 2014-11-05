@@ -7,8 +7,8 @@ private:
 	v_type id;//顶点的id
 	char status;//顶点的状态，该顶点是否被删除等
 	uint32_t param;//顶点的属性，暂时用一个作为测试
-    e_type size;//边的数目
-    b_type head;//顶点块链表的头指针
+   	 e_type size;//边的数目
+    	b_type head;//顶点块链表的头指针
 	b_type tail;//顶点块链表的为指针
 public:
 	explicit Vertex(v_type i);
@@ -26,7 +26,7 @@ public:
 	void setSize(e_type s);
 	void setHead(b_type h);
 	void setTail(b_type t);
-};
+}__attribute__((packed));
 
 //边的类
 class Edge{
@@ -35,11 +35,12 @@ public:
 	v_type dst_id;//目标顶点id
 	uint32_t param;//边的属性，写一个用来测试
 	t_type timestamp;//时间戳	
-};
+}__attribute__((packed));
 
 //块的头部类
 template <typename T>
 class BlockHeader{
+public:
 	char type;//块的类型
 	b_type number;//块号
 	b_type pre;//前一个块
@@ -47,7 +48,7 @@ class BlockHeader{
 	uint32_t capacity;//块的容量，边的个数或者顶点的个数
 	uint32_t size;//已经存取的数目
 	T *data;//块的数据
-};
+}__attribute__((packed));
 
 
 

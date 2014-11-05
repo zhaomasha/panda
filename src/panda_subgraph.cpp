@@ -19,8 +19,9 @@ void Subgraph::format(){
 	io.seekg(0,fstream::end);
 	uint32_t file_len=io.tellg();
 	cout<<"filelen:"<<file_len<<endl;
-	head.free_num=0
+	head.free_num=0;
 	uint32_t blocks=(file_len-sizeof(SubgraphHeader))/head.block_size;
+	cout<<"block size:"<<blocks<<endl;
 /*
 	cout<<"freenum:"<<head.free_num<<endl;
 	io.seekp(0);
@@ -28,12 +29,33 @@ void Subgraph::format(){
 	io.seekg(0);
 	io.read((char*)&head,sizeof(SubgraphHeader));			
 	cout<<"new  freenum:"<<head.free_num<<endl;*/
+
 	//把空闲的文件分成空闲块，然后串成一个空闲块链表，先用简单的链表形式做测试
 	int i;
 	for(i=0;i<blocks;i++){
 		//内存块首地址
-		block=(BlockHeader*)malloc(sizeof(BlockHeader));
-		block.data=block++;
+		block=(BlockHeader<Edge>*)malloc(head.block_size);
+		block->number=i;
+		block->data=(Edge*)(block+1);
+		block->capacity=(head.block_size-sizeof(BlockHeader<Edge>))/sizeof(Edge);
+		block->size=0;
+		block->data[0].param=i;
+		block->size=1;
+		block->next=head.free_head;
+		head.free_head=block->number;
+		io.seekp(sizeof(SubgraphHeader)+i*head.block_size);
+		io.write((char*)block,head.block_size);
+	}
+	//遍历每一块
+	b_type p=head.free_head;
+	while(p!=INVALID_BLOCK){
+		block=(BlockHeader<Edge>*)malloc(head.block_size);
+		io.seekg(sizeof(SubgraphHeader)+p*head.block_size);
+		io.read((char*)block,head.block_size);
+		block->data=(Edge*)(block+1);
+		cout<<"block num:"<<block->number<<"block value"<<block->data[0].param<<endl;
+		p=block->next;
+		free(block);
 	}
 	  	
 }

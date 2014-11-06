@@ -20,7 +20,12 @@ class Subgraph{
         string filename;//子图对应的文件名
 	fstream io;
 	SubgraphHeader head;
-	BlockHeader<Edge> *block;//只包含一个块做测试
+	BlockHeader<Edge> *block;//测试字段
+        //子图在内存中缓存的结构，该子图所有的块一起管理
+        //unordered_map<b_type,Node*> cache;
+        c_type cache;
+	Node *node_head,*node_tail;//指向内存中块链表的头部和尾部，块链表是双向链表，表明块被访问的时间顺序
+	
 public:
 	//创建一个子图的文件，初始化大小为16M
         void init(string filename);
@@ -29,6 +34,9 @@ public:
 	f_type get_offset(b_type num);
 	void update_index();
 	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
+	void test();
+	void* requireRaw(uint32_t type);
+	void* require(uint32_t type);
 };
 
 

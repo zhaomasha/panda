@@ -4,8 +4,14 @@ int main()
 {
 	Subgraph s;
 	s.init("sd");
-	s.add_file();
-	s.format(1024);
-	s.add_file();
-	s.update_index();
+	s.format(131072);
+        void *tmp=s.requireRaw(1);
+	cout<<((BlockHeader<Vertex>*)tmp)->number<<" "<<((BlockHeader<Vertex>*)tmp)->capacity<<endl;
+	tmp=s.requireRaw(2);
+	cout<<((BlockHeader<Edge>*)tmp)->number<<" "<<((BlockHeader<Edge>*)tmp)->capacity<<endl;
+        tmp=s.requireRaw(3);
+	cout<<((BlockHeader<Index>*)tmp)->number<<" "<<((BlockHeader<Index>*)tmp)->capacity<<endl;
+
+
+	//cout<<INVALID_VERTEX<<" "<<INVALID_BLOCK<<" "<<INVALID_INDEX;
 }

@@ -48,7 +48,18 @@ void Vertex::setTail(b_type t)
 {
 	tail=t;
 }
-
+/*template<typename T> void BlockHeader<T>::init_block(){
+	//内容链表和空闲链表置为非法块，说明还没有内容，也没有初始化索引
+	list_head=INVALID_INDEX;
+	list_tail=INVALID_INDEX;
+	list_free=INVALID_INDEX;
+	uint32_t i;
+	//初始化空闲链表，单向链表
+	for(i=0;i<capacity;i++){
+		data[i].next=list_free;
+		list_free=i;	
+	}
+}*/
 
 
 

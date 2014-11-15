@@ -57,9 +57,10 @@ typedef uint32_t e_type;//边数目的类型
 typedef uint32_t b_type;//块id的类型
 typedef uint64_t t_type;//时间戳的类型
 typedef fstream::pos_type f_type;//文件偏移的类型
-static v_type ZERO=0;
-static v_type const INVALID_BLOCK=~ZERO;//无效的块号
-static v_type const INVALID_VERTEX=~0U;//无效的顶点号
+static v_type V_ZERO=0;
+static b_type B_ZERO=0;
+static b_type const INVALID_BLOCK=~B_ZERO;//无效的块号
+static v_type const INVALID_VERTEX=~V_ZERO;//无效的顶点号
 static uint32_t const INVALID_INDEX=~0U;//无效的索引号
 #endif
 

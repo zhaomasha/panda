@@ -2,7 +2,6 @@
 #define PANDA_SUBGRAPH
 #include "panda_head.hpp"
 #include "panda_types.hpp"
-
 //子图的头
 class SubgraphHeader{
 public:
@@ -14,18 +13,15 @@ public:
 	b_type block_num;//块的总数目
     	uint32_t block_size;//该子图的block大小
 }__attribute__((packed));
-
 //子图类
 class Subgraph{
+public:
         string filename;//子图对应的文件名
 	fstream io;
 	SubgraphHeader head;
-	BlockHeader<Edge> *block;//测试字段
         //子图在内存中缓存的结构，该子图所有的块一起管理
         //unordered_map<b_type,Node*> cache;
         c_type cache;
-	Node *node_head,*node_tail;//指向内存中块链表的头部和尾部，块链表是双向链表，表明块被访问的时间顺序
-	
 public:
 	//创建一个子图的文件，初始化大小为16M
         void init(string filename);
@@ -35,8 +31,12 @@ public:
 	void update_index();
 	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
 	void test();
-	void* requireRaw(uint32_t type);
-	void* require(uint32_t type);
+	b_type requireRaw(uint32_t type);
+	b_type require(uint32_t type);
+	void* get_block(b_type number);
+	void add_vertex(Vertex& vertex);
+	void all_vertex();
+	Vertex* get_vertex(v_type id);
 };
 
 

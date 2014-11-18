@@ -62,6 +62,9 @@ static b_type B_ZERO=0;
 static b_type const INVALID_BLOCK=~B_ZERO;//无效的块号
 static v_type const INVALID_VERTEX=~V_ZERO;//无效的顶点号
 static uint32_t const INVALID_INDEX=~0U;//无效的索引号
+typedef unordered_map<b_type,void*> c_type;//缓存的类型
+typedef unordered_map<b_type,void*>::iterator c_it;
+
 #endif
 
 

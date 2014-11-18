@@ -1,4 +1,4 @@
-#include "panda_types.hpp"
+#include "panda_subgraph.hpp"
 Vertex::Vertex(v_type i):id(i),size(0),head(INVALID_BLOCK),tail(INVALID_BLOCK){}
 v_type Vertex::getId() const
 {

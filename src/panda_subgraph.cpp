@@ -93,14 +93,15 @@ b_type Subgraph::requireRaw(uint32_t type){
 	free(block);
 	return number;	
 }
-//增加一个顶点，暂时不考虑块中顶点的删除，删除只是添加一个标记
+//增加一个顶点，暂时不考虑块中顶点的删除，删除只是添加一个标记，同时只操作一个块，不需要盯住
 void Subgraph::add_vertex(Vertex &vertex){
+	cout<<"start---------------"<<endl;
 	//在顶点块的链表中找到一个有空闲位置的块，只有链表的尾块可能没有满
 	BlockHeader<Vertex> *b;
 	if(head.vertex_tail==INVALID_BLOCK){
 		//如果链表尾是空，则说明还没有顶点块，则申请一个顶点块
 		b_type num=require(1);
-		b=(BlockHeader<Vertex> *)get_block(num);
+		b=(BlockHeader<Vertex> *)get_block(num);//不需要盯住该块
 		//更新子图的顶点链表索引，双向链表
 		head.vertex_head=num;
 		head.vertex_tail=num;
@@ -111,13 +112,13 @@ void Subgraph::add_vertex(Vertex &vertex){
 		
 	}else{	
 		//链表尾不是空，说明有顶点块，取出链表尾块
-		b=(BlockHeader<Vertex> *)get_block(head.vertex_tail);
+		b=(BlockHeader<Vertex> *)get_block(head.vertex_tail);//不需要盯住该块
 		if(b->size==b->capacity){
 			//块满了，申请一个块
 			b_type num=require(1);
 			b->next=num;
 			b->clean=1;//块修改后一定要记得把脏位置1
-			b=(BlockHeader<Vertex> *)get_block(num);
+			b=(BlockHeader<Vertex> *)get_block(num);//不需要盯住该块
 			b->next=INVALID_BLOCK;
 			b->pre=head.vertex_tail;
 			head.vertex_tail=num;
@@ -133,6 +134,7 @@ void Subgraph::add_vertex(Vertex &vertex){
 	b->add_content(vertex);
 	b->clean=1;
 	head.vertex_num++;//子图对顶点的统计信息
+	cout<<"over++++++++++++++++++"<<endl;
 }
 //返回顶点的指针，没有建索引，参数2用来记录该顶点所属的块号，当该块的内容改变时，要把脏位置1
 Vertex* Subgraph::get_vertex(v_type id,b_type *num){
@@ -152,38 +154,157 @@ Vertex* Subgraph::get_vertex(v_type id,b_type *num){
 	}	
 	return NULL;
 }
-//加入一条边，参数1是边所属顶点的id，参数2是边
+//加入一条边，参数1是边所属顶点的id，参数2是边，可能同时操作多块，需要盯住块
 void Subgraph::add_edge(v_type id,Edge &e){
-	b_type num;
-	//获得顶点
+	cout<<"edge start---------"<<endl;
+	b_type num;//顶点所在的块号
+	b_type b_num;//边所在的块号
+	//获得顶点，以及顶点所在的块
 	Vertex *v=get_vertex(id,&num);
+	//获取顶点所在的块，把此块盯住
+	BlockHeader<Vertex> *b=(BlockHeader<Vertex>*)get_block(num);
+	(b->fix)++;
 	//查询该顶点的索引块，得到边要加入的块号
-		
+	cout<<"edge start1---------"<<endl;
+	b_num=index_edge(v,e.id,num);
+	cout<<"edge num:"<<b_num<<endl;
+	cout<<"edge stop1---------"<<endl;
+	(b->fix)--;//获得边的块号后，顶点所在的块可以不需要盯住了
+	BlockHeader<Edge>* block=(BlockHeader<Edge>*)get_block(b_num);
+	e.status=0;//刚插入的边的状态为0，表示存在
+	block->add_content(e);//把边加入块中	
+	block->clean=1;
+	cout<<"edge stop++++++++++"<<endl;
 } 
-//查询顶点的索引块，参数1是顶点的指针，参数2是边的目的顶点的id，返回边要加入的块号
+//查询顶点的索引块，参数1是顶点的指针，参数2是边的目的顶点的id，参数3是顶点的块号，返回边要加入的块号，而且确保这个块肯定还能容纳边
 b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 	BlockHeader<Index> *b=NULL;
-	//1：获取索引块
+	//1：获取索引块链表的第一块，然后盯住这个块
 	if(v->index==INVALID_BLOCK){
-		//如果顶点还没有索引块，则创建一个索引块
+		//如果顶点还没有索引块，则创建一个索引块，以后这个块一直是头块，采取分裂的方式扩容
 		b_type new_num=require(3);
 		//加入到顶点的索引链表中
 		v->index=new_num;
 		//修改了顶点的数据，则要给顶点所在的块的脏位置1
-		b=(BlockHeader<Index> *)get_block(num);
-		b->clean=1;
-                //获取新分配的索引块，!!!!!!!!!!!!现在还没有加锁，可能会把顶点所在的块删掉，从而导致错误!!!!!!!!!!
+		BlockHeader<Vertex> *bv=(BlockHeader<Vertex> *)get_block(num);
+		bv->clean=1;
+                //获取新分配的索引块
 		b=(BlockHeader<Index> *)get_block(new_num);
-		b->init();
-		b->next=INVALID_BLOCK;	
+		cout<<"索引项数目"<<b->capacity<<endl;
+		b->init_block();
+		b->next=INVALID_BLOCK;
+		b->pre=INVALID_BLOCK;	
 		b->clean=1;
+		//把索引块盯住
+		b->fix++;
 		
 	}else{
 		//顶点有索引块，则取出第一块
-		b=(BlockHeader<Index> *)get_block(v->index);	
+		b=(BlockHeader<Index> *)get_block(v->index);
+		b->fix++;//一定要盯住，在这里调了好久的bug	
 	}
-	//2：查询边应该插入的位置
-	b_type	
+	//2：查询边应该插入的索引块
+	while(true){
+		if((b->min==INVALID_VERTEX)||(id<b->min)){
+			//如果下一块最小值为无效，或者插入的边的id小于下一块最小的id，说明该块就是要找的索引块
+			uint32_t i=b->list_head;
+			if(i==INVALID_INDEX){
+				//只有该顶点插入第一条边的时候，list_head才会为无效值，才会主动创建边的块
+				Index in;//创建一个索引项
+				in.id=INVALID_VERTEX;//下一个索引项不存在，最小值就是无效的
+				in.target=require(2);//获取一个边块号
+				cout<<"块号"<<in.target<<endl;
+				b->add_content(in);//把索引项插入索引块中
+				b->clean=1;//索引块脏位置1
+				BlockHeader<Edge> *insert_b=(BlockHeader<Edge>*)get_block(in.target);//获取边块，这个块一直是块头，采取分裂方式扩容
+				//把块加入到顶点的边链表中，作为块头，同时把顶点所在块脏位置1
+				v->head=in.target;
+				insert_b->pre=INVALID_BLOCK;
+				insert_b->next=INVALID_BLOCK;
+				insert_b->min=in.id;
+				BlockHeader<Vertex> *bv=(BlockHeader<Vertex> *)get_block(num);
+				bv->clean=1;
+				//初始化该块
+				insert_b->init_block();
+				insert_b->clean=1;
+				(b->fix)--;//找到块后，就可以不用盯住索引块了
+				return in.target;	
+			}else{
+				while(true){
+					//遍历该块的索引项，找出边要插入的块
+					if((b->data[i].content.id==INVALID_VERTEX)||(id<b->data[i].content.id)){
+						//如果下一个索引项的最小值无效或者大于插入边的id，则这个索引项就是要找的
+						cout<<"索引块："<<b->number<<endl;
+						cout<<"b指针："<<b<<endl;	
+						BlockHeader<Edge> *insert_b=(BlockHeader<Edge>*)get_block(b->data[i].content.target);//根据索引获得边块
+						cout<<"b1指针:"<<insert_b<<endl;
+						if(insert_b->size<insert_b->capacity){
+							//如果该边块还没有满，则返回该块
+							(b->fix)--;//找到块后，就可以不用盯住索引块了
+							cout<<"返回:"<<insert_b->number<<endl;
+							return insert_b->number;
+						}else{
+							//如果满了，则要进行边块的分裂
+							cout<<"wawo 满了"<<endl;
+							insert_b->fix++;//由于要分裂，所以要把该块盯住
+							b_type new_block_num=require(2);//从空闲块中释放一个新边块
+							BlockHeader<Edge> *new_block=(BlockHeader<Edge> *)get_block(new_block_num);//这个块不需要初始化	
+							new_block->fix++;//新块需要盯住，应为这两个edge块到最后还要用到，不能被中间换出，否则指针就乱指了
+							cout<<"sasasasasasasaqwq"<<endl;
+							insert_b->split(new_block,this,2);//分裂块
+							cout<<"sasasasasasasa"<<endl;
+							//添加新块的索引
+							Index in;
+							in.target=new_block_num;
+							in.id=new_block->min;//新索引项的值
+							b->data[i].content.id=insert_b->min;//修改旧索引项的值
+							if(b->size<b->capacity){
+								//如果索引块内容没满，添加新的索引项
+								b->add_content(in);
+							}else{
+								//索引块满了，分裂索引块
+								b_type new_index_num=require(3);
+								BlockHeader<Index> *new_index=(BlockHeader<Index> *)get_block(new_index_num);//这个块不需要初始化
+								new_index->fix++;
+								cout<<"lala1"<<new_index->number<<endl;
+								b->split(new_index,this,3);
+								cout<<"lala2"<<new_index->number<<endl;
+								if(in.id<new_index->data[new_index->list_head].content.id){
+									//如果索引项的值小于新索引块的第一项的值，则把索引插入旧块
+									b->add_content(in);
+								}else{
+									//否则插入新索引块
+									new_index->add_content(in);
+									new_index->clean=1;
+								}
+								new_index->fix--;
+							}
+							b->clean=1;
+							(b->fix)--;//索引块也不需要盯住了
+							//判断该边要插入哪个块，旧块和新块之间选择
+							insert_b->fix--;//分裂完后，不需要盯住了
+							new_block->fix--;
+							if(id<insert_b->min){
+								//插入旧块
+								return insert_b->number;
+							}else{
+								return new_block->number;
+							}
+						}
+					}else{
+						i=b->data[i].next;
+					}
+					
+				}
+			}	
+			
+		}else{
+			(b->fix)--;//不在这一块，则把盯住位释放，继续找下一块
+			b=(BlockHeader<Index> *)get_block(b->next);
+			(b->fix)++;//盯住新的块
+		}
+	}
+	
 }
 //-----------测试函数，输出所有的顶点
 void Subgraph::all_vertex(){
@@ -196,6 +317,26 @@ void Subgraph::all_vertex(){
 	}	
 }
 //-------------
+//------------测试函数，输出顶点的一个边块的所有边
+void Subgraph::output_edge(v_type id){
+	cout<<"输出ing。。。。";
+	b_type tmp;
+	Vertex *v=get_vertex(id,&tmp);
+	/*b_type num=v->index;
+	BlockHeader<Index>* index=(BlockHeader<Index>*)get_block(num);
+	num=index->data[index->list_head].content.target;
+	BlockHeader<Edge>* edge=(BlockHeader<Edge>*)get_block(num);
+	edge->output();*/
+	b_type num=v->head;
+	while(num!=INVALID_BLOCK){
+		BlockHeader<Edge>* edge_block=(BlockHeader<Edge>*)get_block(num);
+		
+		edge_block->output();
+		num=edge_block->next;
+	}
+}
+
+//------------
 //得到一个块，该块号要存在，如果块缓存在cache中，则直接返回，如果没有缓存，则从文件中读取到cache，有必要的时候要移除一个cache，还没考虑到锁
 void* Subgraph::get_block(b_type number){
 	c_it block=cache.find(number);
@@ -207,11 +348,20 @@ void* Subgraph::get_block(b_type number){
 	else{
 		//如果该块不在缓存中，则读入该块
 		if(!(cache.size()<atoi(getenv("CACHESZ")))){
-			//如果缓存满了，则移除一个块，随机移除，没有考虑到替换策略，删除前要判断该块是否脏了，脏了就要写入到文件
-			srand((unsigned)time(0));
+			//如果缓存满了，则移除一个块，随机移除，被盯住的块不能移除，没有考虑到替换策略，删除前要判断该块是否脏了，脏了就要写入到文件
+			/*srand((unsigned)time(0));
 			int ff=rand();
 			int del=ff%cache.size();
-			for(block=cache.begin();del>0;del--) block++;
+			for(block=cache.begin();del>0;del--) block++;*/
+			for(block=cache.begin();block!=cache.end();block++){
+				//遍历缓存，遇到没盯住的块就停止
+				if(((BlockHeader<char>*)(block->second))->fix==0) break;
+				cout<<"block "<<block->first<<"  被盯住了"<<endl;
+			}
+			if(block==cache.end()) {
+				cout<<"块都被盯住了"<<endl;
+				return NULL;//如果块都被盯住，则返回空指针
+			}
 			cout<<"删除块"<<block->first<<endl;
 			if(((BlockHeader<char>*)(block->second))->clean==1){
 				//块脏了，则写入到文件中
@@ -219,6 +369,8 @@ void* Subgraph::get_block(b_type number){
 				io.seekp(get_offset(block->first));
 				io.write((char*)(block->second),head.block_size);
 			}
+			//释放块所占的内存，在缓存结构里移除
+			free(block->second);
 			cache.erase(block);
 		}
 		//分配内存，把块读进来	
@@ -226,6 +378,7 @@ void* Subgraph::get_block(b_type number){
 		io.seekg(get_offset(number));
 		io.read((char*)(p),head.block_size);
 		((BlockHeader<char>*)p)->clean=0;//刚进来的块是干净的	
+		((BlockHeader<char>*)p)->fix=0;//刚进来的块没有被盯住	
 		//只有块在内存的时候，才会把块的data字段指向正确的块内容区域
 		((BlockHeader<char>*)p)->data=(Content<char>*)((BlockHeader<char>*)p+1);
 		//把块加入缓存中

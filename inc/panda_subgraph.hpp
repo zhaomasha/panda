@@ -3,6 +3,16 @@
 #include "panda_head.hpp"
 class Vertex;
 class Edge;
+//这是一个包装类，为缓冲区中的块添加链表
+class Node{
+public:
+	void *block;
+	Node *pre;
+	Node *next;
+}__attribute__((packed));
+typedef unordered_map<b_type,Node*> c_type;//缓存的类型
+typedef unordered_map<b_type,Node*>::iterator c_it;
+
 //子图的头
 class SubgraphHeader{
 public:
@@ -23,6 +33,9 @@ public:
         //子图在内存中缓存的结构，该子图所有的块一起管理
         //unordered_map<b_type,Node*> cache;
         c_type cache;
+	Node* first;//内存中块链表的头
+	Node* last;//内存中块链表的尾
+	int delete_count;
 public:
 	//创建一个子图的文件，初始化大小为16M
         void init(string filename);
@@ -79,6 +92,10 @@ public:
 	char status;//边的状态，有没有被删除
 	v_type id;//目标顶点id
 	uint32_t param;//边的属性，写一个用来测试
+	uint32_t param1;//边的属性，写一个用来测试
+	uint32_t param2;//边的属性，写一个用来测试
+	uint32_t param3;//边的属性，写一个用来测试
+	uint32_t param4;//边的属性，写一个用来测试
 	t_type timestamp;//时间戳	
 }__attribute__((packed));
 
@@ -313,13 +330,6 @@ public:
 	}
 }__attribute__((packed));
 
-//这是一个包装类，承载块头的指针，以后还要里面加一个锁
-class Node{
-public:
-	void *p;
-}__attribute__((packed));
-//typedef unordered_map<b_type,Node> c_type;//缓存的类型
-//typedef unordered_map<b_type,Node>::iterator c_it;
 
 
 

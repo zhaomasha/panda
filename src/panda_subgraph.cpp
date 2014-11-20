@@ -4,6 +4,8 @@ void Subgraph::init(string name){
 	//文件存在则清零，不存在则创建
 	filename=name;
 	io.open(filename.c_str(),fstream::out|fstream::in|ios::binary|fstream::trunc);
+	first=last=NULL;
+	delete_count=0;
 	//初始化默认大小
 	add_file(atoi(getenv("INITSZ")));
 }
@@ -227,11 +229,10 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 			}else{
 				while(true){
 					//遍历该块的索引项，找出边要插入的块
-					if(i==INVALID_INDEX){
-						cout<<"overflow id:"<<id<<endl;
+					/*if(i==INVALID_INDEX){
 						b->output();
 						return 0;
-					}
+					}*/
 					if((b->data[i].content.id==INVALID_VERTEX)||(id<b->data[i].content.id)){
 						//如果下一个索引项的最小值无效或者大于插入边的id，则这个索引项就是要找的
 						BlockHeader<Edge> *insert_b=(BlockHeader<Edge>*)get_block(b->data[i].content.target);//根据索引获得边块
@@ -255,23 +256,15 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 							b->data[i].content.id=insert_b->min;//修改旧索引项的值
 							if(b->size<b->capacity){
 								//如果索引块内容没满，添加新的索引项
-								cout<<"no full1++++++++++++++"<<endl;
-								b->output();
 								b->add_content(in);
-								cout<<"no full---------------"<<endl;
-								b->output();	
-								cout<<"value*****************"<<in.id<<endl;
 							}else{
 								//索引块满了，分裂索引块
 								b_type new_index_num=require(3);
 								BlockHeader<Index> *new_index=(BlockHeader<Index> *)get_block(new_index_num);//这个块不需要初始化
 								new_index->fix++;
-								cout<<"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"<<endl;
-								b->output();
 								b->split(new_index,this);
 								//b->output();
 								//new_index->output();
-								cout<<"value:**************"<<in.id<<endl;
 								if(in.id<new_index->data[new_index->list_head].content.id){
 									//如果索引项的值小于新索引块的第一项的值，则把索引插入旧块
 									b->add_content(in);
@@ -282,17 +275,11 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 									//否则插入新索引块
 									new_index->add_content(in);
 									new_index->clean=1;
-									cout<<"new block last id:"<<new_index->data[new_index->list_tail].content.id<<endl;
 									new_index->min=new_index->data[new_index->list_tail].content.id;//这句也可以不要
 								}
-								b->output();
-								new_index->output();
 								//b->data[b->list_tail].content.id=INVALID_VERTEX;//这两句要不要也是一样的
 								//new_index->data[new_index->list_tail].content.id=INVALID_VERTEX;//
-								b->output();
-								new_index->output();
 								new_index->fix--;
-								cout<<"++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"<<endl;
 							}
 							b->clean=1;
 							(b->fix)--;//索引块也不需要盯住了
@@ -395,49 +382,87 @@ void Subgraph::output_edge(v_type id){
 
 //------------
 //得到一个块，该块号要存在，如果块缓存在cache中，则直接返回，如果没有缓存，则从文件中读取到cache，有必要的时候要移除一个cache，还没考虑到锁
+//块存在hash表中，并且创建链表，新块放置在链头，旧块放置在链尾
 void* Subgraph::get_block(b_type number){
-	c_it block=cache.find(number);
-	void *p;
-	if(block!=cache.end()){
+	c_it node_it=cache.find(number);
+	void *block;
+	Node *node;
+	if(node_it!=cache.end()){
 		//如果该块在缓存中，则返回块指针
-		return block->second;
+		return node_it->second->block;
 	}
 	else{
 		//如果该块不在缓存中，则读入该块
 		if(!(cache.size()<atoi(getenv("CACHESZ")))){
-			//如果缓存满了，则移除一个块，随机移除，被盯住的块不能移除，没有考虑到替换策略，删除前要判断该块是否脏了，脏了就要写入到文件
+			//如果缓存满了，则移除链表中的最后一个块，被盯住的块不能移除，删除前要判断该块是否脏了，脏了就要写入到文件
 			/*srand((unsigned)time(0));
 			int ff=rand();
 			int del=ff%cache.size();
 			for(block=cache.begin();del>0;del--) block++;*/
-			cout<<"delete"<<endl;
-			for(block=cache.begin();block!=cache.end();block++){
-				//遍历缓存，遇到没盯住的块就停止
-				if(((BlockHeader<char>*)(block->second))->fix==0) break;
+			node=last;
+			while(node!=NULL){
+				//遍历缓存，遇到没盯住的块就停止，基本上是常数时间，被盯住的块一般是在链表头，还可以改进成LRU，但效果可能不是很明显
+				if(((BlockHeader<char>*)(node->block))->fix==0) break;
+				else node=node->pre;
 			}
-			if(block==cache.end()) {
+			if(node==NULL) {
 				return NULL;//如果块都被盯住，则返回空指针
 			}
-			if(((BlockHeader<char>*)(block->second))->clean==1){
+			if(((BlockHeader<char>*)(node->block))->clean==1){
 				//块脏了，则写入到文件中
-				io.seekp(get_offset(block->first));
-				io.write((char*)(block->second),head.block_size);
+				io.seekp(get_offset(((BlockHeader<char>*)(node->block))->number));
+				io.write((char*)(node->block),head.block_size);
 			}
-			//释放块所占的内存，在缓存结构里移除
-			free(block->second);
-			cache.erase(block);
+			//释放块所占的内存，在缓存结构里移除，以及更新链表
+			//更新链表要分3种情况，该块在末尾，链表中，头部，！！！！！！！！多线程的时候要重点考虑这里的锁机制，假设缓存不会只有一个块，否则会有问题
+			if(node->pre==NULL){
+				//头部
+				Node *tmp=node->next;
+				tmp->pre=NULL;
+				first=tmp;
+			}else{
+				if(node->next==NULL){
+					//尾部
+					Node *tmp=node->pre;
+					tmp->next=NULL;
+					last=tmp;
+				}else{
+					//中间
+					Node *tmp_pre=node->pre;
+					Node *tmp_next=node->next;
+					tmp_pre->next=tmp_next;
+					tmp_next->pre=tmp_pre;
+				}
+			}
+			Node *tmp=node;
+			cache.erase(((BlockHeader<char>*)(node->block))->number);
+			free(tmp);
+			delete_count++;
 		}
 		//分配内存，把块读进来	
-		p=malloc(head.block_size);
+		node=(Node*)malloc(sizeof(Node)+head.block_size);
+		node->block=node+1;
+		block=node->block;
 		io.seekg(get_offset(number));
-		io.read((char*)(p),head.block_size);
-		((BlockHeader<char>*)p)->clean=0;//刚进来的块是干净的	
-		((BlockHeader<char>*)p)->fix=0;//刚进来的块没有被盯住	
+		io.read((char*)(block),head.block_size);
+		((BlockHeader<char>*)block)->clean=0;//刚进来的块是干净的	
+		((BlockHeader<char>*)block)->fix=0;//刚进来的块没有被盯住	
 		//只有块在内存的时候，才会把块的data字段指向正确的块内容区域
-		((BlockHeader<char>*)p)->data=(Content<char>*)((BlockHeader<char>*)p+1);
+		((BlockHeader<char>*)block)->data=(Content<char>*)((BlockHeader<char>*)block+1);
 		//把块加入缓存中
-		cache[number]=p;
-		return p;
+		cache[number]=node;
+		//更新链表
+		if(first==NULL){
+			first=last=node;
+			node->pre=NULL;
+			node->next=NULL;
+		}else{
+			node->pre=NULL;
+			first->pre=node;
+			node->next=first;
+			first=node;
+		}
+		return block;
 	}
 }
 

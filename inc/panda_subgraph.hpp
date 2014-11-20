@@ -40,6 +40,8 @@ public:
 	Vertex* get_vertex(v_type id,b_type*num);
 	void add_edge(v_type id,Edge& e);
 	b_type index_edge(Vertex* v,v_type id,b_type num);
+	Edge* read_edge(v_type s_id,v_type d_id);
+	void index_output_edge(v_type id);
 };
 
 
@@ -117,8 +119,16 @@ public:
 	//模板类的成员函数定义在外部，会导致链接错误
 	//------测试函数，读取该块的内容，只读取内容的标识字段
 	void output(){
+		cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
 		uint32_t p=list_head;
-		cout<<"block num:"<<number<<" min:"<<min<<endl;
+		while(p!=INVALID_INDEX){
+			cout<<data[p].content.id<<" ";
+			p=data[p].next;
+		}
+		cout<<endl;
+	}
+	void output_index(){
+		uint32_t p=list_free;
 		while(p!=INVALID_INDEX){
 			cout<<data[p].content.id<<" ";
 			p=data[p].next;
@@ -151,16 +161,20 @@ public:
 	//块内还有空间的时候，增加一条内容，把内容顺序地插入到内容双向链表中，都按照id字段排序，每个T类型都有一个id字段
 	//块内没有空间了，什么都不会做
 	void add_content(T& content){
-		cout<<"aas start----"<<endl;
+		/*if(type==3){
+			cout<<"start"<<content.id<<endl;
+			output();
+		}*/
 		uint32_t free=requireRaw();
 		if(free==INVALID_INDEX){
 			//------测试输出
-			cout<<"块满了啦，傻x"<<endl;
 			return;
 		}
 		uint32_t p=list_head;
 		while(p!=INVALID_INDEX){
 			int flag=0;
+			/*if(type==3)
+				cout<<"比较"<<content.id<<" "<<data[p].content.id<<"|||";*/
 			if(content.id<=data[p].content.id) flag=1;
 			if(flag==1){
 				//如果flag等于1，则在这个块前面插入
@@ -179,6 +193,10 @@ public:
 				}
 				data[free].content=content;
 				size++;
+				/*if(type==3){
+					cout<<"over"<<endl;
+					output();
+				}*/
 				return;
 			}else{
 				//如果flag等于0，则继续往下遍历
@@ -188,12 +206,14 @@ public:
 		//p为无效索引，说明待插入的值是最大的，可以根据尾指针来插入
 		if(list_tail==INVALID_INDEX){
 			//如果尾指针是无效值
+		//	if(type==3) cout<<number<<"没有元素"<<endl;
 			list_head=free;
 			list_tail=free;
 			data[free].next=INVALID_INDEX;
 			data[free].pre=INVALID_INDEX;
 		}else{
 			//尾指针有值
+		//	if(type==3) cout<<number<<"插到末尾"<<endl;
 			data[free].next=INVALID_INDEX;
 			data[free].pre=list_tail;
 			data[list_tail].next=free;
@@ -201,34 +221,33 @@ public:
 		}
 		data[free].content=content;
 		size++;
-		cout<<"aaa stop++++++"<<endl;
+		//if(type==3) output();
+		
 	}
 	//块分裂的函数，前提是块满了，把一个块里面的内容分成两份，一份转移到另外的块，并且同时把新块加入链表中
-	void split(BlockHeader<T>* block,Subgraph* subgraph,uint32_t type){
+	void split(BlockHeader<T>* block,Subgraph* subgraph){
+		/*if(type==3){
+			cout<<"laile"<<number<<"  "<<data[list_tail].content.id<<endl;
+			output();
+		}*/
 		//获取最大值和最小值
 		v_type h=data[list_head].content.id;
 		v_type t=data[list_tail].content.id;
-		cout<<"最大最小："<<h<<"  "<<t<<endl;
-		cout<<"结构大小："<<"Content<T> "<<sizeof(Content<T>)<<" capacity "<<capacity<<" BlockHeader "<<sizeof(BlockHeader<T>)<<endl;
 		memcpy(block->data,data,sizeof(Content<T>)*capacity);//把要分裂的块中的数据部分复制到新块中
 		//memcpy(block->data,data,subgraph->head.block_size-sizeof(BlockHeader<T>));//把要分裂的块中的数据部分复制到新块中
-		cout<<"copy"<<endl;
-		T* dst;
 		uint32_t p=list_head;//p是要分割的临界，首先置为链表头
 		uint32_t s_size;//分割后，前面部分的大小
 		if(h==t||type==3){
-			//如果元素都是相等的，那么就分一半
+			//如果元素都是相等的或者分裂的是索引块，那么就分一半
 			int i;
 			for(i=0;i<size/2;i++){
 				p=data[p].next;	
 			}
 			s_size=size/2;
-			cout<<"size:"<<s_size<<"  p:"<<p<<endl;
 			
 		}else{
 			//如果元素不都是相等，则按中间值来划分
 			v_type mid=(h+t)/2;//由于有INVALID_VERTEX，运算会溢出
-			cout<<"mid:"<<mid<<endl;
 			s_size=0;
 			while(true){
 				if(data[p].content.id<=mid) {
@@ -236,12 +255,12 @@ public:
 					s_size++;
 					
 				}else{
-					cout<<"最小值："<<data[p].content.id<<endl;
 					break;
 				}
 			}
 		}
 		//新块，把后面一部分当做内容链表
+		/*if(type==3) cout<<"p:"<<data[p].content.id<<endl;*/
 		block->list_head=p;
 		block->list_tail=list_tail;
 		(block->data[(block->data[p]).pre]).next=INVALID_INDEX;
@@ -258,14 +277,12 @@ public:
 			min=data[p].content.id;//更新该块的下一个块的最小值	
 		if(type==3){
 			min=data[data[p].pre].content.id;//如果分裂索引块，该块的下一个块的最小值是p索引的块的最小值，这个值记录在p的前一个索引项里
-			data[list_tail].content.id=INVALID_VERTEX;//该块的最后一个索引项的id要置为无效
+			//data[list_tail].content.id=INVALID_VERTEX;//该块的最后一个索引项的id要置为无效，这个bug调了十个小时
 		}
 		//把新块加入到链表中
 		block->next=next;
-		cout<<"sdsd"<<endl;
 		if(next!=INVALID_BLOCK){
 			//如果原链表中的下一个块不是无效的，则要导入下一个块，更新其指针
-			cout<<"type"<<type<<"6"<<endl;
 			BlockHeader<T> *next_block=(BlockHeader<T>*)((subgraph->get_block)(next));
 			next_block->pre=block->number;
 			next_block->clean=1;
@@ -274,6 +291,25 @@ public:
 		next=block->number;
 		clean=1;
 		block->clean=1;	
+		/*if(type==3) {
+			cout<<"nima:"<<number<<"  "<<data[list_tail].content.id<<"  "<<block->number<<"  "<<block->data[block->list_tail].content.id<<endl;
+			output();
+			output_index();
+			block->output();
+			block->output_index();
+		}*/
+	}
+	//根据id返回块中包含该id的第一个T指针
+	T* get_content(v_type id){
+		uint32_t num=list_head;
+		while(num!=INVALID_INDEX){
+			if(data[num].content.id==id) 
+				return &(data[num].content);
+			else{
+				num=data[num].next;
+			}
+		}
+		return NULL;
 	}
 }__attribute__((packed));
 

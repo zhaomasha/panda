@@ -1,17 +1,11 @@
 #include<iostream>
+#include<arpa/inet.h>
 using namespace std;
-template<typename T>
-class A{
-public:
-	T param;
-	void func();
-};
-//template<typename T>
-void A::func(){
-	cout<<param<<endl;
-}
+
 int main(){
-	A<double> a;
-	a.func();
+	uint32_t o=0;
+	uint32_t x=~o;
+	if(23>x) cout<<"sds";
+	else cout<<x;
 }
 

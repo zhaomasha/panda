@@ -94,8 +94,6 @@ public:
 	uint32_t param;//边的属性，写一个用来测试
 	uint32_t param1;//边的属性，写一个用来测试
 	uint32_t param2;//边的属性，写一个用来测试
-	uint32_t param3;//边的属性，写一个用来测试
-	uint32_t param4;//边的属性，写一个用来测试
 	t_type timestamp;//时间戳	
 }__attribute__((packed));
 
@@ -136,13 +134,13 @@ public:
 	//模板类的成员函数定义在外部，会导致链接错误
 	//------测试函数，读取该块的内容，只读取内容的标识字段
 	void output(){
-		cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
+		//cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
 		uint32_t p=list_head;
 		while(p!=INVALID_INDEX){
-			cout<<data[p].content.id<<" ";
+			//cout<<data[p].content.id<<" ";
 			p=data[p].next;
 		}
-		cout<<endl;
+		//cout<<endl;
 	}
 	void output_index(){
 		uint32_t p=list_free;

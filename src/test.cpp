@@ -7,7 +7,7 @@ long getTime(){
 int main()
 {
 	Subgraph s;
-	s.init("sd");
+	s.init("subgraph.dat");
 	s.format(4096);
 	//cout<<"begin: "<<s.cache.size()<<endl;
 	int i;
@@ -28,7 +28,7 @@ int main()
 	for(i=1;i<1000000;i++){
 		int ff=rand();
 		int del=ff%1000000+1;
-		e.id=del;
+		e.id=i;
 		s.add_edge(44,e);
 		//cout<<i<<" ";
 	}
@@ -60,6 +60,20 @@ int main()
 	time_next=getTime();
 	cout<<"times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
 	cout<<"delete_count_read:"<<s.delete_count<<endl;
+	
+	time_pre=getTime();
+	s.output_edge(44);
+	time_next=getTime();
+	cout<<"out times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
+	cout<<"delete_count_read:"<<s.delete_count<<endl;
+	
+	time_pre=getTime();
+	s.index_output_edge(44);
+	time_next=getTime();
+	cout<<"index out times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
+	cout<<"delete_count_read:"<<s.delete_count<<endl;
+
+
 	//s.output_edge(44);
 	//s.all_vertex();
 	

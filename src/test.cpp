@@ -46,7 +46,13 @@ int main()
 
 	//s.output_edge(44);
 	cout<<"delete_count_write:"<<s.delete_count<<endl;
-	
+	s.delete_count=0;
+	time_pre=getTime();
+	s.output_edge(44);
+	time_next=getTime();
+	cout<<"out times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
+	cout<<"delete_count_read:"<<s.delete_count<<endl;
+
 	//s.output_edge(44);
 	s.delete_count=0;
 	time_pre=getTime();
@@ -61,12 +67,8 @@ int main()
 	cout<<"times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
 	cout<<"delete_count_read:"<<s.delete_count<<endl;
 	
-	time_pre=getTime();
-	s.output_edge(44);
-	time_next=getTime();
-	cout<<"out times:"<<(time_next-time_pre)/1000.0<<"  "<<"rate:"<<sizeof(Edge)*1000000/((time_next-time_pre)/1000.0)/1024/1024<<endl;
-	cout<<"delete_count_read:"<<s.delete_count<<endl;
-	
+		
+	s.delete_count=0;
 	time_pre=getTime();
 	s.index_output_edge(44);
 	time_next=getTime();

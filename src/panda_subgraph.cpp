@@ -224,15 +224,10 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 				insert_b->init_block();
 				insert_b->clean=1;
 				(b->fix)--;//找到块后，就可以不用盯住索引块了
-				//b->output();
 				return in.target;	
 			}else{
 				while(true){
 					//遍历该块的索引项，找出边要插入的块
-					/*if(i==INVALID_INDEX){
-						b->output();
-						return 0;
-					}*/
 					if((b->data[i].content.id==INVALID_VERTEX)||(id<b->data[i].content.id)){
 						//如果下一个索引项的最小值无效或者大于插入边的id，则这个索引项就是要找的
 						BlockHeader<Edge> *insert_b=(BlockHeader<Edge>*)get_block(b->data[i].content.target);//根据索引获得边块
@@ -263,22 +258,17 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num){
 								BlockHeader<Index> *new_index=(BlockHeader<Index> *)get_block(new_index_num);//这个块不需要初始化
 								new_index->fix++;
 								b->split(new_index,this);
-								//b->output();
-								//new_index->output();
 								if(in.id<new_index->data[new_index->list_head].content.id){
 									//如果索引项的值小于新索引块的第一项的值，则把索引插入旧块
 									b->add_content(in);
 									//一定要更新旧块的min
 									b->min=b->data[b->list_tail].content.id;
-									//b->output();
 								}else{
 									//否则插入新索引块
 									new_index->add_content(in);
 									new_index->clean=1;
 									new_index->min=new_index->data[new_index->list_tail].content.id;//这句也可以不要
 								}
-								//b->data[b->list_tail].content.id=INVALID_VERTEX;//这两句要不要也是一样的
-								//new_index->data[new_index->list_tail].content.id=INVALID_VERTEX;//
 								new_index->fix--;
 							}
 							b->clean=1;
@@ -367,11 +357,6 @@ void Subgraph::all_vertex(){
 void Subgraph::output_edge(v_type id){
 	b_type tmp;
 	Vertex *v=get_vertex(id,&tmp);
-	/*b_type num=v->index;
-	BlockHeader<Index>* index=(BlockHeader<Index>*)get_block(num);
-	num=index->data[index->list_head].content.target;
-	BlockHeader<Edge>* edge=(BlockHeader<Edge>*)get_block(num);
-	edge->output();*/
 	b_type num=v->head;
 	while(num!=INVALID_BLOCK){
 		BlockHeader<Edge>* edge_block=(BlockHeader<Edge>*)get_block(num);
@@ -395,10 +380,6 @@ void* Subgraph::get_block(b_type number){
 		//如果该块不在缓存中，则读入该块
 		if(!(cache.size()<atoi(getenv("CACHESZ")))){
 			//如果缓存满了，则移除链表中的最后一个块，被盯住的块不能移除，删除前要判断该块是否脏了，脏了就要写入到文件
-			/*srand((unsigned)time(0));
-			int ff=rand();
-			int del=ff%cache.size();
-			for(block=cache.begin();del>0;del--) block++;*/
 			node=last;
 			while(node!=NULL){
 				//遍历缓存，遇到没盯住的块就停止，基本上是常数时间，被盯住的块一般是在链表头，还可以改进成LRU，但效果可能不是很明显
@@ -465,5 +446,3 @@ void* Subgraph::get_block(b_type number){
 		return block;
 	}
 }
-
-

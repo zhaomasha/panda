@@ -1,0 +1,7 @@
+.*
+!.gitignore
+*.out
+core*
+src/client
+src/server
+

@@ -10,9 +10,10 @@ public:
 	Node *pre;
 	Node *next;
 }__attribute__((packed));
-typedef unordered_map<b_type,Node*> c_type;//缓存的类型
+typedef unordered_map<b_type,Node*> c_type;//子图内存储块的hash表
 typedef unordered_map<b_type,Node*>::iterator c_it;
-
+/*typedef unordered_map<v_type,Edge*> bc_type;//块内存储边的hash表
+typedef unordered_map<v_type,Edge*>::iterator bc_it;*/
 //子图的头
 class SubgraphHeader{
 public:
@@ -46,15 +47,15 @@ public:
 	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
 	b_type requireRaw(uint32_t type);
 	b_type require(uint32_t type);
-	void* get_block(b_type number);
-	void add_vertex(Vertex& vertex);
-	void all_vertex();
-	void output_edge(v_type id);
-	Vertex* get_vertex(v_type id,b_type*num);
-	void add_edge(v_type id,Edge& e);
-	b_type index_edge(Vertex* v,v_type id,b_type num);
-	Edge* read_edge(v_type s_id,v_type d_id);
-	void index_output_edge(v_type id);
+	void* get_block(b_type number,char is_new,char is_hash);
+	void add_vertex(Vertex& vertex,char is_hash);
+	void all_vertex(char is_hash);
+	void output_edge(v_type id,char is_hash);
+	Vertex* get_vertex(v_type id,b_type*num,char is_hash);
+	void add_edge(v_type id,Edge& e,char is_hash);
+	b_type index_edge(Vertex* v,v_type id,b_type num,char is_hash);
+	Edge* read_edge(v_type s_id,v_type d_id,char is_hash);
+	void index_output_edge(v_type id,char is_hash);
 };
 
 
@@ -92,8 +93,6 @@ public:
 	char status;//边的状态，有没有被删除
 	v_type id;//目标顶点id
 	uint32_t param;//边的属性，写一个用来测试
-	uint32_t param1;//边的属性，写一个用来测试
-	uint32_t param2;//边的属性，写一个用来测试
 	t_type timestamp;//时间戳	
 }__attribute__((packed));
 
@@ -117,6 +116,8 @@ public:
 template <typename T>
 class BlockHeader{
 public:
+	typedef unordered_map<v_type,T*> bc_type;//块内存储边的hash表
+	typedef typename unordered_map<v_type,T*>::iterator bc_it;
 	char type;//块的类型，1代表顶点，2代表边，3代表索引
 	char clean;//块是否干净，0表示赶紧，1表示脏
 	uint32_t fix;//块的盯住位，零的时候表示没有盯住，可以被移除出去，大于0表示被盯住了
@@ -130,6 +131,8 @@ public:
 	uint32_t list_free;//块内部空闲链表的头
 	v_type max;//内容的最大值，暂时没用到
 	v_type min;//内容的最小值，主要在内部索引块中使用，记录下一个索引块的最小值
+	bc_type *data_hash;	
+	char is_hash;//hash位，指明该块是否建立了hash
 	Content<T> *data;//块的数据
 	//模板类的成员函数定义在外部，会导致链接错误
 	//------测试函数，读取该块的内容，只读取内容的标识字段
@@ -149,6 +152,18 @@ public:
 			p=data[p].next;
 		}
 		cout<<endl;
+	}
+	//创建块内边的hash表
+	void init_hash(){
+		data_hash=new bc_type();
+		is_hash=1;//hash位置1，说明该块在内存中建立了hash	
+		uint32_t num=list_head;
+		while(num!=INVALID_INDEX){
+			//遍历块内的边，构建hash，重复的num则不会添加
+			if(data_hash->find(num)==data_hash->end())
+				(*data_hash)[data[num].content.id]=(T*)(data+num);
+			num=data[num].next;
+		}
 	}
 	//初始化block的内部索引
 	void init_block(){
@@ -176,20 +191,14 @@ public:
 	//块内还有空间的时候，增加一条内容，把内容顺序地插入到内容双向链表中，都按照id字段排序，每个T类型都有一个id字段
 	//块内没有空间了，什么都不会做
 	void add_content(T& content){
-		/*if(type==3){
-			cout<<"start"<<content.id<<endl;
-			output();
-		}*/
 		uint32_t free=requireRaw();
 		if(free==INVALID_INDEX){
-			//------测试输出
+			//块内没有空间了，直接返回
 			return;
 		}
 		uint32_t p=list_head;
 		while(p!=INVALID_INDEX){
 			int flag=0;
-			/*if(type==3)
-				cout<<"比较"<<content.id<<" "<<data[p].content.id<<"|||";*/
 			if(content.id<=data[p].content.id) flag=1;
 			if(flag==1){
 				//如果flag等于1，则在这个块前面插入
@@ -208,10 +217,12 @@ public:
 				}
 				data[free].content=content;
 				size++;
-				/*if(type==3){
-					cout<<"over"<<endl;
-					output();
-				}*/
+				if(is_hash==1){
+					//如果该块有hash表，则要更新hash表
+					if(data_hash->find(content.id)==data_hash->end()){
+						(*data_hash)[content.id]=(T*)(data+free);
+					}
+				}
 				return;
 			}else{
 				//如果flag等于0，则继续往下遍历
@@ -221,14 +232,12 @@ public:
 		//p为无效索引，说明待插入的值是最大的，可以根据尾指针来插入
 		if(list_tail==INVALID_INDEX){
 			//如果尾指针是无效值
-		//	if(type==3) cout<<number<<"没有元素"<<endl;
 			list_head=free;
 			list_tail=free;
 			data[free].next=INVALID_INDEX;
 			data[free].pre=INVALID_INDEX;
 		}else{
 			//尾指针有值
-		//	if(type==3) cout<<number<<"插到末尾"<<endl;
 			data[free].next=INVALID_INDEX;
 			data[free].pre=list_tail;
 			data[list_tail].next=free;
@@ -236,10 +245,16 @@ public:
 		}
 		data[free].content=content;
 		size++;
-		//if(type==3) output();
+		if(is_hash==1){
+			//如果该块有hash表，则要更新hash表
+			if(data_hash->find(content.id)==data_hash->end()){
+				(*data_hash)[content.id]=(T*)(data+free);
+			}
+		}
 		
 	}
 	//块分裂的函数，前提是块满了，把一个块里面的内容分成两份，一份转移到另外的块，并且同时把新块加入链表中
+	//分裂的两个块，暂时把块内hash表去掉
 	void split(BlockHeader<T>* block,Subgraph* subgraph){
 		/*if(type==3){
 			cout<<"laile"<<number<<"  "<<data[list_tail].content.id<<endl;
@@ -248,6 +263,7 @@ public:
 		//获取最大值和最小值
 		v_type h=data[list_head].content.id;
 		v_type t=data[list_tail].content.id;
+		
 		memcpy(block->data,data,sizeof(Content<T>)*capacity);//把要分裂的块中的数据部分复制到新块中
 		//memcpy(block->data,data,subgraph->head.block_size-sizeof(BlockHeader<T>));//把要分裂的块中的数据部分复制到新块中
 		uint32_t p=list_head;//p是要分割的临界，首先置为链表头
@@ -298,14 +314,25 @@ public:
 		block->next=next;
 		if(next!=INVALID_BLOCK){
 			//如果原链表中的下一个块不是无效的，则要导入下一个块，更新其指针
-			BlockHeader<T> *next_block=(BlockHeader<T>*)((subgraph->get_block)(next));
+			BlockHeader<T> *next_block=(BlockHeader<T>*)((subgraph->get_block)(next,0,0));
 			next_block->pre=block->number;
 			next_block->clean=1;
 		}
 		block->pre=number;
 		next=block->number;
 		clean=1;
-		block->clean=1;	
+		block->clean=1;
+		if(is_hash==1){
+			//如果原来的块有hash，则分裂之后的两个块也有hash
+			delete data_hash;
+			init_hash();
+			delete block->data_hash;
+			block->init_hash();
+		}else{
+			//原来的块没有hash，则还是要清楚新块，因为新块有可能是初始化过的
+			delete block->data_hash;
+			block->is_hash=0;
+		}	
 		/*if(type==3) {
 			cout<<"nima:"<<number<<"  "<<data[list_tail].content.id<<"  "<<block->number<<"  "<<block->data[block->list_tail].content.id<<endl;
 			output();
@@ -314,8 +341,20 @@ public:
 			block->output_index();
 		}*/
 	}
-	//根据id返回块中包含该id的第一个T指针
+	//根据id返回块中包含该id的一个T指针
 	T* get_content(v_type id){
+		if(is_hash==1){
+			//如果有hash表，则通过hash查找
+			//cout<<"hash"<<endl;
+			bc_it it=data_hash->find(id);
+			if(it!=data_hash->end()){
+				return it->second;
+			}
+			else{ 
+				return NULL;
+			}
+		}
+		//cout<<"no hash"<<endl;
 		uint32_t num=list_head;
 		while(num!=INVALID_INDEX){
 			if(data[num].content.id==id) 

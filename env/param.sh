@@ -1,8 +1,8 @@
 #!/bin/bash
 export panda_home='/home/bsp/programer/panda' 
-export INITSZ='1'
+export INITSZ='100'
 export BLOCKSZ='512'
-export INCREASZ='2'
-export CACHESZ='2000'
+export INCREASZ='10'
+export CACHESZ='30000'
 
 

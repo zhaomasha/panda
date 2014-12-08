@@ -5,7 +5,7 @@ using namespace zmq;
 int main(){
 	context_t ctx(16);
 	socket_t sock(ctx,ZMQ_REQ);
-	sock.connect("tcp://127.0.0.1:5555");
+	sock.connect("tcp://192.168.11.53:5556");
 	message_t omsg(sizeof(uint8_t));
 	*(uint8_t*)omsg.data()=0;
 	sock.send(omsg,ZMQ_SNDMORE);

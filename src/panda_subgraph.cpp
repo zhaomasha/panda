@@ -27,6 +27,44 @@ void Subgraph::format(uint32_t block_size){
 	//初始化索引
 	update_index();
 }
+//读取子图文件，还原一个子图
+void Subgraph::recover(string name){
+	filename=name;
+	io.open(filename.c_str(),fstream::app|fstream::in|ios::binary);
+	io.seekg(0);
+	io.read((char*)&head,sizeof(SubgraphHeader));//读取子图文件中的子图头，这部分数据要事先读入内存
+	first=last=NULL;//内存缓冲区是0
+	delete_count=0;
+	
+	
+}
+//析构函数，把子图头和内存中的缓存存到硬盘里
+Subgraph::~Subgraph(){
+        //把子图头存入文件
+	io.seekp(0);	
+	//io.seekp(get_offset(block->number));
+        io.write((char*)&head,sizeof(SubgraphHeader));
+  	//遍历子图的缓存里面的块，脏了就写到文件里面
+	c_it it;
+        it=cache.begin();
+	Node* node;
+	while(it!=cache.end()){
+		node=it->second;
+		if(((BlockHeader<char>*)(node->block))->clean==1){
+			//脏块，则写入到文件中
+			io.seekp(get_offset(((BlockHeader<char>*)(node->block))->number));
+			io.write((char*)(node->block),head.block_size);
+			cout<<((BlockHeader<char>*)(node->block))->number<<" dirty ";
+		}
+		//释放块所占的内存
+		if(((BlockHeader<char>*)(node->block))->is_hash==1){
+			cout<<" hash"<<endl;
+			delete ((BlockHeader<char>*)(node->block))->data_hash;//释放块内的hash表内存
+		}
+		free(node);
+		it++;
+	}
+}
 //计算块对应的文件偏移
 f_type Subgraph::get_offset(b_type num){
 	return sizeof(SubgraphHeader)+num*head.block_size;

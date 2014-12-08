@@ -45,7 +45,10 @@ int main(){
 	context_t ctx(16);
 	pthread_t thread_arg;
 	socket_t gather_sock(ctx,ZMQ_ROUTER);
-	gather_sock.bind("tcp://127.0.0.1:5555");
+	string slave_ip(getenv("SLAVE_IP"));
+	string slave_port(getenv("SLAVE_PORT"));
+        string endpoint="tcp://"+slave_ip+":"+slave_port;
+	gather_sock.bind(endpoint.c_str());
 	socket_t scatter_sock(ctx,ZMQ_DEALER);	
 	scatter_sock.bind("inproc://scatter");
 	pthread_create(&thread_arg,NULL,worker,&ctx);

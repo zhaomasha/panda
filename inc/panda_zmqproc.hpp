@@ -1,5 +1,5 @@
-#ifndef NYNN_ZMQPROT_HPP_BY_SATANSON
-#define NYNN_ZMQPROT_HPP_BY_SATANSON
+#ifndef PANDA_ZMQPROC
+#define PANDA_ZMQPROC
 
 #include<panda_zmq.hpp>
 #include<panda_head.hpp>
@@ -67,11 +67,9 @@ private:
 	Requester& operator=(Requester const&);
 };*/
 
-//Replier¿¿¿¿¿¿¿¿¿¿¿
 class Replier{
 public:
 	explicit Replier(socket_t& s):sock(s){}
-        //¿¿¿¿¿¿¿¿¿¿¿¿¿¿
 	bool parse_ask(){
 		int i=0;
 		do{
@@ -87,22 +85,18 @@ public:
 	uint8_t get_cmd(){
 		return *(uint8_t*)imsg[ASK_CMD].data();
 	}
-        //¿¿¿¿
 	void* get_arg(){
 		return imsg[ASK_ARG].data();
 	}
-        //¿¿¿¿¿¿¿
 	size_t get_arg_size(){
 		return imsg[ASK_ARG].size();
 	}
-	//¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿¿
 	void ans(uint32_t status,void* data,size_t size){
 		zmq::message_t omsg[ANS_SIZE];//¿¿¿¿¿¿	
 		omsg[ANS_STATUS].rebuild(sizeof(uint32_t));
 		*(uint32_t*)omsg[ANS_STATUS].data()=status;
 		omsg[ANS_DATA].rebuild(size);
 		memcpy(omsg[ANS_DATA].data(),data,size);//¿¿¿¿¿¿¿¿¿
-                //¿¿¿¿
 		int i=0;
 		while(i<ANS_SIZE-1)sock.send(omsg[i++],ZMQ_SNDMORE);
 		sock.send(omsg[i],0);

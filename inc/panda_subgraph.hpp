@@ -42,6 +42,8 @@ public:
         void init(string filename);
 	//创建子图的头，初始化索引结构
 	void format(uint32_t blocksize=atoi(getenv("BLOCKSZ")));
+	void recover(string name);
+	~Subgraph();
 	f_type get_offset(b_type num);
 	void update_index();
 	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
@@ -140,7 +142,7 @@ public:
 		//cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
 		uint32_t p=list_head;
 		while(p!=INVALID_INDEX){
-			//cout<<data[p].content.id<<" ";
+			cout<<data[p].content.id<<" ";
 			p=data[p].next;
 		}
 		//cout<<endl;

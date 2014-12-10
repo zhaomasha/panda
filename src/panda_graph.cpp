@@ -1,7 +1,8 @@
 #include "panda_graph.hpp"
 
 //在已有的图路径里面，初始所有的子图
-void Graph::init(string dir){
+void Graph::init(string dir,uint32_t blocksize){
+	block_size=blocksize;
 	base_dir=dir;
 	glob_t g;
 	g.gl_offs=0;
@@ -45,8 +46,13 @@ Subgraph * Graph::get_subgraph(v_type vertex_id){
 	if(it!=sgs.end()){
 		//存在子图了直接返回指针
 		return it->second;
-	}else{
+	}else{	
 		//不存在，创建子图，添加到缓存中，再返回
+		Subgraph* s=new Subgraph();
+		s->init(subgraph_path(key));
+		s->format(block_size);
+		sgs[key]=s;
+		return s;	
 	}	
 }
 

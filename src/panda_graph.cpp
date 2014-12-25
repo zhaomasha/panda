@@ -6,7 +6,7 @@ void Graph::init(string dir,uint32_t blocksize){
 	base_dir=dir;
 	glob_t g;
 	g.gl_offs=0;
-	string sg_pattern=base_dir+"/*";//dat文件是子图数据文件
+	string sg_pattern=base_dir+"/*.dat";//dat文件是子图数据文件
 	int res=glob(sg_pattern.c_str(),0,0,&g);
 	if(res!=0&&res!=GLOB_NOMATCH){
 		cout<<"failed to invoking glob"<<endl;

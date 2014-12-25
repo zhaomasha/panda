@@ -121,7 +121,7 @@ public:
 	typedef unordered_map<v_type,T*> bc_type;//块内存储边的hash表
 	typedef typename unordered_map<v_type,T*>::iterator bc_it;
 	char type;//块的类型，1代表顶点，2代表边，3代表索引
-	char clean;//块是否干净，0表示赶紧，1表示脏
+	char clean;//块是否干净，0表示干净	，1表示脏
 	uint32_t fix;//块的盯住位，零的时候表示没有盯住，可以被移除出去，大于0表示被盯住了
 	b_type number;//块号
 	b_type pre;//前一个块

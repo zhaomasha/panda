@@ -1,8 +1,7 @@
 #ifndef PANDA_BPLUS
 #define PANDA_BPLUS
 #include "panda_head.hpp"
-#include "panda_subgraph.hpp"
-class value{
+/*class value{
 public:
 	int a;
 	int b;
@@ -14,7 +13,7 @@ public:
 ostream& operator<< (ostream& out,value& v){
 	cout<<v.a<<"-"<<v.b;
 	return out;
-}
+}*/
 //B+树的节点基类型
 template<typename T>
 class Bnode{
@@ -83,6 +82,9 @@ class BtreeHeader{
 		b_type free_head;//空闲链表的头块
 		b_type free_num;//空闲块的数目
 		b_type block_num;//块的总数目
+		void print(){
+			cout<<block_size<<" "<<root_node<<" "<<first_node<<" "<<free_head<<" "<<free_num<<" "<<block_num<<endl; 
+		}
 };
 
 template<typename T,typename TV>
@@ -95,16 +97,7 @@ class Btree{
 		Node* first;//内存中块链表的头
 		Node* last;//尾
 		int delete_count;
-
-		/*	void init(string name);
-			void add_file(uint32_t size=atoi(getenv("INCREASE")));
-			void format(uint32_t blocksize=atoi(getenv("INDEX_BLOCKSZ")));
-			f_type get_offset(b_type num);
-			void update_index();
-			b_type require(uint32_t type);//封装了requirRaw，无论空闲块是否有，都获取一个块
-			b_type requireRaw(uint32_t type);//空闲块还有的时候，获取一个空闲块，类型为叶子节点还是非叶子节点，并且初始化一些参数
-			void* get_block(b_type number);*/
-
+	
 		//新建一个索引文件(文件存在，则会被清零)，初始化为默认的大小（操作系统的栈大小要调整，否则会段错误）
 		void init(string name){
 			//文件存在则清零，不存在则创建
@@ -117,7 +110,7 @@ class Btree{
 		}
 
 		//文件扩张，默认大小可以配置，也可以指定
-		void add_file(uint32_t size=atoi(getenv("INCREASE"))){
+		void add_file(uint32_t size=atoi(getenv("INCREASZ"))){
 			io.seekp(0,fstream::end);
 			char tmp[1024*1024*size];
 			io.write(tmp,sizeof(tmp));
@@ -136,7 +129,7 @@ class Btree{
 		//读取索引文件，还原一个内存中的索引结构
 		void recover(string name){
 			filename=name;
-			io.open(filename.c_str(),fstream::app|fstream::in|ios::binary);
+			io.open(filename.c_str(),fstream::out|fstream::in|ios::binary);
 			io.seekg(0);
 			io.read((char*)&head,sizeof(BtreeHeader));//读取子图文件中的子图头，这部分数据要事先读入内存
 			first=last=NULL;//内存缓冲区是0
@@ -144,6 +137,7 @@ class Btree{
 		}
 		//析构函数，把子图头和内存中的缓存存到硬盘里
 		~Btree(){
+			cout<<"index: "<<filename<<" xigou"<<endl;
 			//把子图头存入文件
 			io.seekp(0);	
 			//io.seekp(get_offset(block->number));
@@ -491,14 +485,15 @@ class Btree{
 			}
 			//根据flag，决定要不要遍历后面的node
 			if(flag==1){
-				//flag为1，要继续遍历后面的
+				//flag为1，要继续遍历后面的，而且肯定是连续的，只要第一条不是，该块后面的也不会是
 				b_type next_num=node->next;
 				while(next_num!=INVALID_BLOCK){
 					Bleaf<T,TV>* next_node=(Bleaf<T,TV>*)get_block(next_num);
 					for(i=0;i<next_node->size;i++){
 						if(key==next_node->keys[i]){
 							values.push_back(next_node->values[i]);
-						}
+						}else
+							break;
 					}
 					if(i==next_node->size){
 						next_num=next_node->next;

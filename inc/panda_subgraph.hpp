@@ -1,61 +1,86 @@
+/*
+*这个文件是panda系统的底层，包含顶点类，边类，块类(BlockHeader)，子图类
+*一个子图是由一个子图头（Subgrapheader）和若干个块组成
+*子图实现了内部索引的算法
+*/
+
 #ifndef PANDA_SUBGRAPH
 #define PANDA_SUBGRAPH
 #include "panda_head.hpp"
+#include "panda_bplus.hpp"
+#include "panda_type.hpp"
+
 class Vertex;
 class Edge;
-//这是一个包装类，为缓冲区中的块添加链表
-class Node{
-public:
-	void *block;
-	Node *pre;
-	Node *next;
-}__attribute__((packed));
-typedef unordered_map<b_type,Node*> c_type;//子图内存储块的hash表
-typedef unordered_map<b_type,Node*>::iterator c_it;
-/*typedef unordered_map<v_type,Edge*> bc_type;//块内存储边的hash表
-typedef unordered_map<v_type,Edge*>::iterator bc_it;*/
+
 //子图的头
 class SubgraphHeader{
 public:
 	b_type free_head;//空闲块链表的头指针
-	b_type vertex_head;//顶点链表的头指针
+	b_type vertex_head;//顶点链表的头指针，顶点块组成双向链表
 	b_type vertex_tail;//顶点链表的尾指针
-	v_type vertex_num;//子图中顶点的数目
+	v_type vertex_num;//子图中顶点的数目，有维护
     	b_type free_num;//空闲块数目
 	b_type block_num;//块的总数目
     	uint32_t block_size;//该子图的block大小
 }__attribute__((packed));
+
 //子图类
 class Subgraph{
 public:
+	string graph_dir;//子图对应的目录
         string filename;//子图对应的文件名
-	fstream io;
-	SubgraphHeader head;
-        //子图在内存中缓存的结构，该子图所有的块一起管理
-        //unordered_map<b_type,Node*> cache;
-        c_type cache;
+	string sub_key;
+	fstream io;//子图对应的文件io
+	SubgraphHeader head;//子图的头 
+        c_type cache;//子图在内存中缓存的结构，该子图所有的块一起管理
 	Node* first;//内存中块链表的头
 	Node* last;//内存中块链表的尾
-	int delete_count;
+	int delete_count;//测试用，缓存替换的次数 
+	Btree<v_type,b_type> vertex_index;//顶点的索引类
 public:
-	//创建一个子图的文件，初始化大小为16M
-        void init(string filename);
-	//创建子图的头，初始化索引结构
-	void format(uint32_t blocksize=atoi(getenv("BLOCKSZ")));
-	void recover(string name);
-	~Subgraph();
-	f_type get_offset(b_type num);
-	void update_index();
+	//创建一个子图的文件，初始化大小可以配置，返回0表示成功，返回1表示失败
+        int init(string filename,string dir);
+        //子图大小的动态扩张。大小可以配置，也可以指定
 	void add_file(uint32_t size=atoi((getenv("INCREASZ"))));
-	b_type requireRaw(uint32_t type);
+	//创建子图的头，初始化索引结构，紧跟在init之后
+	void format(uint32_t blocksize=atoi(getenv("BLOCKSZ")));
+        //已有子图文件的情况下，读取一个子图到内存
+	void recover(string name,string dir);
+	//通过子图目录和子图名字得到子图key
+	string get_sub_key(string name,string dir);
+	//析构函数，把内存中的子图内容写到文件中去
+	~Subgraph();
+      	//计算块号在的文件中的偏移 
+	f_type get_offset(b_type num);
+        //对新增的文件初始化索引，紧跟在add_file之后
+	void update_index();
+	//申请一个新块号，没有空闲块，就要透明地扩展文件大小
 	b_type require(uint32_t type);
+        //有空闲块的时候，申请一个块号
+	b_type requireRaw(uint32_t type);
+        //根据块号得到一个块，块已经读入缓存中 
 	void* get_block(b_type number,char is_new,char is_hash);
-	void add_vertex(Vertex& vertex,char is_hash);
+
+        //增加一个顶点，并更新顶点索引，顶点已经存在返回1，不存在则插入然后返回0
+	int add_vertex(Vertex& vertex,char is_hash=0);
+	//顶点是否存在，存在返回1，不存在返回0
+	bool vertex_is_in(v_type id);
+	//返回顶点的指针，不存在，则返回空指针
+	Vertex* get_vertex_raw(v_type id,b_type*num,char is_hash=0);
+	//返回顶点类，参数是顶点的id，入股顶点不存在，则返回无效顶点，顶点的id为INVALID_VERTEX
+	Vertex get_vertex(v_type id,char is_hash=0);
+	//插入一条边，成功了返回0，顶点不存在，则会失败，返回1
+	int add_edge(v_type id,Edge& e,char is_hash=0);
+	//查询顶点的索引，返回边要插入的块
+	b_type index_edge(Vertex* v,v_type id,b_type num,char is_hash=0);
+	//读取两个顶点之间的所有边，源顶点不存在，则会返回1，源顶点存在则返回0
+	int read_edges(v_type s_id,v_type d_id,list<Edge_u>& edges,char is_hash=0);
+	//读取顶点所有的边，源顶点不存在，则会返回1，源顶点存在则返回0
+	int read_all_edges(v_type id,list<Edge_u>& edges,char is_hash=0);
+
 	void all_vertex(char is_hash);
 	void output_edge(v_type id,char is_hash);
-	Vertex* get_vertex(v_type id,b_type*num,char is_hash);
-	void add_edge(v_type id,Edge& e,char is_hash);
-	b_type index_edge(Vertex* v,v_type id,b_type num,char is_hash);
 	Edge* read_edge(v_type s_id,v_type d_id,char is_hash);
 	void index_output_edge(v_type id,char is_hash);
 };
@@ -68,34 +93,24 @@ public:
 	v_type id;//顶点的id
 	char status;//顶点的状态，该顶点是否被删除等，0代表存在，1代表已经删除
 	uint32_t param;//顶点的属性，暂时用一个作为测试
-   	e_type size;//边的数目
+   	e_type size;//边的数目，没有维护
     	b_type head;//顶点块链表的头指针
 	b_type tail;//顶点块链表的尾指针，暂时没用到
 	b_type index;//索引块链表的头指针
 	explicit Vertex(v_type i);
-
-	v_type getId()const;
-	char getStatus()const;
-	uint32_t getParam()const;
-	e_type getSize()const;
-	b_type getHead()const;
-	b_type getTail()const;
-	
-	void setId(v_type i);
-	void setStatus(char s);
-	void setParam(uint32_t p);
-	void setSize(e_type s);
-	void setHead(b_type h);
-	void setTail(b_type t);
+	Vertex(Vertex_u v);
 }__attribute__((packed));
 
 //边的类
 class Edge{
 public:
-	char status;//边的状态，有没有被删除
+	char status;//边的状态，有没有被删除，0代表存在，1代表已经删除
 	v_type id;//目标顶点id
 	uint32_t param;//边的属性，写一个用来测试
-	t_type timestamp;//时间戳	
+	t_type timestamp;//时间戳
+	Edge(Edge_u e);
+	Edge();
+	Edge_u to_edge_u(v_type s_id);	
 }__attribute__((packed));
 
 //顶点内部的索引类
@@ -139,13 +154,13 @@ public:
 	//模板类的成员函数定义在外部，会导致链接错误
 	//------测试函数，读取该块的内容，只读取内容的标识字段
 	void output(){
-		//cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
+		cout<<"num:"<<number<<" min:"<<min<<" capacity:"<<capacity<<" size:"<<size<<endl;
 		uint32_t p=list_head;
 		while(p!=INVALID_INDEX){
 			cout<<data[p].content.id<<" ";
 			p=data[p].next;
 		}
-		//cout<<endl;
+		cout<<endl;
 	}
 	void output_index(){
 		uint32_t p=list_free;
@@ -366,6 +381,44 @@ public:
 			}
 		}
 		return NULL;
+	}
+	//把该块中目标顶点是id的边存入集合中，如果第一条边就是，那么返回1，否则返回0
+	int get_contents(v_type id,list<Edge>& edges){
+		uint32_t num=list_head;
+                int flag=0;
+		if(num!=INVALID_INDEX){
+			if(data[num].content.id==id) flag=1;
+		}
+		while(num!=INVALID_INDEX){
+			if(data[num].content.id==id) 
+				edges.push_back(data[num].content);
+			if(data[num].content.id>id) 
+				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
+			num=data[num].next;
+		}
+	}
+	//把该块中目标顶点是id的边存入Edge_u集合中，如果第一条边就是，那么返回1，否则返回0
+	int get_contents(v_type s_id,v_type d_id,list<Edge_u>& edges){
+		uint32_t num=list_head;
+                int flag=0;
+		if(num!=INVALID_INDEX){
+			if(data[num].content.id==d_id) flag=1;
+		}
+		while(num!=INVALID_INDEX){
+			if(data[num].content.id==d_id) 
+				edges.push_back(data[num].content.to_edge_u(s_id));
+			if(data[num].content.id>d_id) 
+				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
+			num=data[num].next;
+		}
+	}
+	//把该块中的所有的边存入到集合中
+	void get_all_contents(v_type s_id,list<Edge_u>& edges){
+		uint32_t num=list_head;
+		while(num!=INVALID_INDEX){
+			edges.push_back(data[num].content.to_edge_u(s_id));
+			num=data[num].next;
+		}
 	}
 }__attribute__((packed));
 

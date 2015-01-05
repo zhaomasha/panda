@@ -156,7 +156,7 @@ namespace zmq
             int rc = zmq_msg_close (&msg);
             ZMQ_ASSERT (rc == 0);
         }
-
+	//重构msg，使msg可以再次被用
         inline void rebuild ()
         {
             int rc = zmq_msg_close (&msg);
@@ -166,7 +166,7 @@ namespace zmq
             if (rc != 0)
                 throw error_t ();
         }
-
+	//重构msg，初始化消息大小
         inline void rebuild (size_t size_)
         {
             int rc = zmq_msg_close (&msg);
@@ -176,7 +176,7 @@ namespace zmq
             if (rc != 0)
                 throw error_t ();
         }
-
+	//重构msg，初始化消息内容
         inline void rebuild (void *data_, size_t size_, free_fn *ffn_,
             void *hint_ = NULL)
         {
@@ -207,6 +207,7 @@ namespace zmq
             int rc = zmq_msg_more (&msg);
             return rc != 0;
         }
+	//返回消息的内容
         inline void *data ()
         {
             return zmq_msg_data (&msg);
@@ -216,6 +217,7 @@ namespace zmq
         {
             return zmq_msg_data (const_cast<zmq_msg_t*>(&msg));
         }
+	//返回消息的大小
         inline size_t size () const
         {
             return zmq_msg_size (const_cast<zmq_msg_t*>(&msg));

@@ -64,6 +64,17 @@ static v_type const INVALID_VERTEX=~V_ZERO;//无效的顶点号
 static uint32_t const INVALID_INDEX=~0U;//无效的索引号
 //typedef unordered_map<b_type,void*> c_type;//缓存的类型
 //typedef unordered_map<b_type,void*>::iterator c_it;
+//这是一个包装类，为缓冲区中的块添加链表，存储块的缓冲区是hash加链表的结构
+class Node{
+public:
+	void *block;
+	Node *pre;
+	Node *next;
+}__attribute__((packed));
+
+typedef unordered_map<b_type,Node*> c_type;//子图内存储块的hash结构
+typedef unordered_map<b_type,Node*>::iterator c_it;
+
 
 #endif
 

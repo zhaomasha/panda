@@ -1,4 +1,12 @@
 #include "panda_graph.hpp"
+//析构函数，释放所有的子图，使子图的脏块更新到文件中去
+Graph::~Graph(){
+	cout<<"graph :"<<base_dir<<" xigou"<<endl;
+	unordered_map<uint32_t,Subgraph*>::iterator it;
+	for(it=sgs.begin();it!=sgs.end();it++){
+		delete it->second;
+	}
+}
 
 //在已有的图路径里面，初始所有的子图
 void Graph::init(string dir,uint32_t blocksize){
@@ -11,12 +19,12 @@ void Graph::init(string dir,uint32_t blocksize){
 	if(res!=0&&res!=GLOB_NOMATCH){
 		cout<<"failed to invoking glob"<<endl;
 	}else{ 
-		if(g.gl_pathc==0) cout<<"no match"<<endl;//子图目录下面没有子图文件
+		if(g.gl_pathc==0) cout<<base_dir<<" no match"<<endl;//子图目录下面没有子图文件
 		else{
 			//遍历子图文件，在内存中创建子图对象
 			for(uint32_t i=0;i<g.gl_pathc;i++){
 				Subgraph *s=new Subgraph();//创建子图
-				s->recover(g.gl_pathv[i]);
+				s->recover(g.gl_pathv[i],base_dir);
 				uint32_t s_key=subgraph_key(g.gl_pathv[i]);//得到子图的key
 				sgs[s_key]=s;//把子图和key加入到图的缓存中
 			}
@@ -36,7 +44,6 @@ string Graph::subgraph_path(uint32_t key){
 	char key_string[40];
 	sprintf(key_string,"%d",key);
 	string path=base_dir+"/"+key_string+".dat";
-	cout<<path<<endl;
 	return path;
 }
 //顶点得到该顶点的子图
@@ -49,7 +56,7 @@ Subgraph * Graph::get_subgraph(v_type vertex_id){
 	}else{	
 		//不存在，创建子图，添加到缓存中，再返回
 		Subgraph* s=new Subgraph();
-		s->init(subgraph_path(key));
+		s->init(subgraph_path(key),base_dir);
 		s->format(block_size);
 		sgs[key]=s;
 		return s;	

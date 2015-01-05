@@ -1,13 +1,40 @@
 ﻿#include "panda_subgraph.hpp"
+
+Vertex::Vertex(v_type i):id(i),size(0),head(INVALID_BLOCK),tail(INVALID_BLOCK){}
+
+Vertex::Vertex(Vertex_u v){
+	id=v.id;
+	param=v.param;
+}
+
+Edge::Edge(Edge_u e){
+	id=e.d_id;
+	param=e.param;
+	timestamp=e.timestamp;
+}
+Edge::Edge(){}
+Edge_u Edge::to_edge_u(v_type s_id){
+	Edge_u edge_u(s_id,id,param,timestamp);
+	return edge_u;
+}
+
 //新建一个子图文件(子图文件存在，则会被清零)，初始化为默认的大小（操作系统的栈大小要调整，否则会段错误）
-void Subgraph::init(string name){
+//返回0表示成功，返回1表示失败
+int Subgraph::init(string name,string dir){
 	//文件存在则清零，不存在则创建
 	filename=name;
 	io.open(filename.c_str(),fstream::out|fstream::in|ios::binary|fstream::trunc);
-	first=last=NULL;
+	if(!io){
+		cout<<name<<" create failed"<<endl;
+		return 1;
+	}	
+	graph_dir=dir;
+	sub_key=get_sub_key(name,dir);
+	first=last=NULL;//内存的缓冲区块链表为空
 	delete_count=0;
 	//初始化默认大小
 	add_file(atoi(getenv("INITSZ")));
+        return 0;
 }
 //子图扩张，默认大小可以配置，也可以指定
 void Subgraph::add_file(uint32_t size){
@@ -26,20 +53,34 @@ void Subgraph::format(uint32_t block_size){
 	head.block_size=block_size;
 	//初始化索引
 	update_index();
+        //创建顶点的索引文件
+	vertex_index.init(graph_dir+"/"+sub_key+"_"+getenv("VERTEX_INDEX_FILENAME"));
+	vertex_index.format();
 }
 //读取子图文件，还原一个子图
-void Subgraph::recover(string name){
+void Subgraph::recover(string name,string dir){
+	graph_dir=dir;
 	filename=name;
-	io.open(filename.c_str(),fstream::app|fstream::in|ios::binary);
+	sub_key=get_sub_key(name,dir);
+	io.open(filename.c_str(),fstream::out|fstream::in|ios::binary);
 	io.seekg(0);
 	io.read((char*)&head,sizeof(SubgraphHeader));//读取子图文件中的子图头，这部分数据要事先读入内存
 	first=last=NULL;//内存缓冲区是0
 	delete_count=0;
-	
-	
+	vertex_index.recover(graph_dir+"/"+sub_key+"_"+getenv("VERTEX_INDEX_FILENAME"));//还原顶点索引	
+}
+//根据子图目录和子图名字得到子图的key
+string Subgraph::get_sub_key(string name,string dir){
+	int begin=dir.length()+1;
+	int len=0;
+	const char *c_name=name.c_str();  
+	for(int i=begin;c_name[i]!='.';i++) len++;
+	string key(c_name+begin,len);
+	return key;
 }
 //析构函数，把子图头和内存中的缓存存到硬盘里
 Subgraph::~Subgraph(){
+	cout<<"subgraph:"<<filename<<" xigou"<<endl;
         //把子图头存入文件
 	io.seekp(0);	
 	//io.seekp(get_offset(block->number));
@@ -54,11 +95,9 @@ Subgraph::~Subgraph(){
 			//脏块，则写入到文件中
 			io.seekp(get_offset(((BlockHeader<char>*)(node->block))->number));
 			io.write((char*)(node->block),head.block_size);
-			cout<<((BlockHeader<char>*)(node->block))->number<<" dirty ";
 		}
 		//释放块所占的内存
 		if(((BlockHeader<char>*)(node->block))->is_hash==1){
-			cout<<" hash"<<endl;
 			delete ((BlockHeader<char>*)(node->block))->data_hash;//释放块内的hash表内存
 		}
 		free(node);
@@ -69,7 +108,7 @@ Subgraph::~Subgraph(){
 f_type Subgraph::get_offset(b_type num){
 	return sizeof(SubgraphHeader)+num*head.block_size;
 }
-//对文件新增的部分建立索引，文件新增的部分还没有取到内存中，否则会有一致性的问题
+//对文件新增的部分建立索引，文件新增的部分还没有取到内存中
 void Subgraph::update_index(){
 	//计算新增部分的块的数目
 	io.seekg(0,fstream::end);
@@ -92,6 +131,7 @@ void Subgraph::update_index(){
 	free(block);	
 }
 //分配一个空闲块，无论空闲块是否还有，参数为块的类型，返回块号(要注意的是，require后的这个块已经脱离了控制，如果当时没用到，则会丢失)
+//由于删除操作是用标志位的方式，所以暂时没有写返还块的操作
 b_type Subgraph::require(uint32_t type){
 	if(head.free_num==0){
 		//如果空闲块为0，则扩展子图文件，并建索引
@@ -133,13 +173,113 @@ b_type Subgraph::requireRaw(uint32_t type){
 	free(block);
 	return number;	
 }
-//增加一个顶点，暂时不考虑块中顶点的删除，删除只是添加一个标记，同时只操作一个块，不需要盯住
-void Subgraph::add_vertex(Vertex &vertex,char is_hash){
+//得到一个块，该块号要存在，如果块缓存在cache中，则直接返回，如果没有缓存，则从文件中读取到cache，有必要的时候要移除一个cache，还没考虑到锁
+//块存在hash表中，并且创建链表，新块放置在链头，旧块放置在链尾
+//is_new代表该块是新分配的块还是旧块，1为新块   is_hash代表要不要为该块创建hash，1为创建
+void* Subgraph::get_block(b_type number,char is_new,char is_hash){
+	c_it node_it=cache.find(number);
+	void *block;
+	Node *node;
+	if(node_it!=cache.end()){
+		//如果该块在缓存中，则返回块指针
+		return node_it->second->block;
+	}
+	else{
+		//如果该块不在缓存中，则读入该块
+		if(!(cache.size()<atoi(getenv("CACHESZ")))){
+			//如果缓存满了，则移除链表中的最后一个块，被盯住的块不能移除，删除前要判断该块是否脏了，脏了就要写入到文件
+			node=last;
+			while(node!=NULL){
+				//遍历缓存，遇到没盯住的块就停止，基本上是常数时间，被盯住的块一般是在链表头，还可以改进成LRU，但效果可能不是很明显
+				if(((BlockHeader<char>*)(node->block))->fix==0) break;
+				else node=node->pre;
+			}
+			if(node==NULL) {
+				return NULL;//如果块都被盯住，则返回空指针
+			}
+			if(((BlockHeader<char>*)(node->block))->clean==1){
+				//块脏了，则写入到文件中
+				io.seekp(get_offset(((BlockHeader<char>*)(node->block))->number));
+				io.write((char*)(node->block),head.block_size);
+			}
+			//释放块所占的内存，在缓存结构里移除，以及更新链表
+			//更新链表要分3种情况，该块在末尾，链表中，头部，！！！！！！！！多线程的时候要重点考虑这里的锁机制，假设缓存不会只有一个块，否则会有问题
+			if(node->pre==NULL){
+				//头部
+				Node *tmp=node->next;
+				tmp->pre=NULL;
+				first=tmp;
+			}else{
+				if(node->next==NULL){
+					//尾部
+					Node *tmp=node->pre;
+					tmp->next=NULL;
+					last=tmp;
+				}else{
+					//中间
+					Node *tmp_pre=node->pre;
+					Node *tmp_next=node->next;
+					tmp_pre->next=tmp_next;
+					tmp_next->pre=tmp_pre;
+				}
+			}
+			Node *tmp=node;
+			cache.erase(((BlockHeader<char>*)(node->block))->number);//在子图hash表里面移除元素
+			if(((BlockHeader<char>*)(tmp->block))->is_hash==1)
+				delete ((BlockHeader<char>*)(tmp->block))->data_hash;//释放块内的hash表内存
+			free(tmp);//释放该块所占的内存
+			delete_count++;
+		}
+		//分配内存，把块读进来	
+		node=(Node*)malloc(sizeof(Node)+head.block_size);
+		node->block=node+1;
+		block=node->block;
+		io.seekg(get_offset(number));
+		io.read((char*)(block),head.block_size);
+		((BlockHeader<char>*)block)->clean=0;//刚进来的块是干净的	
+		((BlockHeader<char>*)block)->fix=0;//刚进来的块没有被盯住
+		((BlockHeader<char>*)block)->is_hash=0;//还没有创建hash表
+		((BlockHeader<char>*)block)->data_hash=NULL;
+		if(is_new==1){
+			((BlockHeader<char>*)block)->list_head=INVALID_INDEX;//这个在block的init函数会置位的，提前是为了hash初始化的统一
+		}
+		//只有块在内存的时候，才会把块的data字段指向正确的块内容区域
+		((BlockHeader<char>*)block)->data=(Content<char>*)((BlockHeader<char>*)block+1);
+		//把块加入缓存中
+		cache[number]=node;
+		//更新链表
+		if(first==NULL){
+			first=last=node;
+			node->pre=NULL;
+			node->next=NULL;
+		}else{
+			node->pre=NULL;
+			first->pre=node;
+			node->next=first;
+			first=node;
+		}
+		if(is_hash==1){
+			char o=((BlockHeader<char>*)block)->type;
+			if(o==1)
+				((BlockHeader<Vertex>*)block)->init_hash();//创建该块的hash表
+			if(o==2)
+				((BlockHeader<Edge>*)block)->init_hash();//创建该块的hash表
+			if(o==3)
+				((BlockHeader<Index>*)block)->init_hash();//创建该块的hash表
+		}
+		return block;
+	}
+}
+
+//增加一个顶点，检查顶点是否已经存在，已经存在则返回1，不存在就插入，返回0。直接在顶点块链表的末尾的空闲块插入一个新顶点，然后更新顶点索引
+int Subgraph::add_vertex(Vertex &vertex,char is_hash){
+	if(vertex_is_in(vertex.id)) return 1;
 	//在顶点块的链表中找到一个有空闲位置的块，只有链表的尾块可能没有满
 	BlockHeader<Vertex> *b;
+	b_type num;
 	if(head.vertex_tail==INVALID_BLOCK){
 		//如果链表尾是空，则说明还没有顶点块，则申请一个顶点块
-		b_type num=require(1);
+		num=require(1);
 		b=(BlockHeader<Vertex> *)get_block(num,1,is_hash);//不需要盯住该块
 		//更新子图的顶点链表索引，双向链表
 		head.vertex_head=num;
@@ -152,9 +292,10 @@ void Subgraph::add_vertex(Vertex &vertex,char is_hash){
 	}else{	
 		//链表尾不是空，说明有顶点块，取出链表尾块
 		b=(BlockHeader<Vertex> *)get_block(head.vertex_tail,0,is_hash);//不需要盯住该块
+		num=head.vertex_tail;
 		if(b->size==b->capacity){
 			//块满了，申请一个块
-			b_type num=require(1);
+			num=require(1);
 			b->next=num;
 			b->clean=1;//块修改后一定要记得把脏位置1
 			b=(BlockHeader<Vertex> *)get_block(num,1,is_hash);//不需要盯住该块
@@ -173,31 +314,50 @@ void Subgraph::add_vertex(Vertex &vertex,char is_hash){
 	b->add_content(vertex);
 	b->clean=1;
 	head.vertex_num++;//子图对顶点的统计信息
+	vertex_index.insert_kv(vertex.id,num);//把顶点id和顶点所在的块号存入索引中
+	return 0;
 }
-//返回顶点的指针，没有建索引，参数2用来记录该顶点所属的块号，当该块的内容改变时，要把脏位置1
-Vertex* Subgraph::get_vertex(v_type id,b_type *num,char is_hash){
-	//遍历的方式寻找顶点，遍历每一个顶点块，每一个块中的所有顶点，找到顶点后就返回该顶点的指针
-	b_type p=head.vertex_head;
-	while(p!=INVALID_BLOCK){
-		BlockHeader<Vertex> *b=(BlockHeader<Vertex> *)get_block(p,0,is_hash);
-		uint32_t i=b->list_head;
-		while(i!=INVALID_INDEX){
-			if(b->data[i].content.id==id) {
-				*num=b->number;
-				return (Vertex *)(b->data+i);//返回指针
-			}
-			i=b->data[i].next;	
-		}			
-		p=b->next;
-	}	
-	return NULL;
+//顶点是否存在，查看索引
+bool Subgraph::vertex_is_in(v_type id){
+	list<b_type> r;
+	vertex_index.find_values(id,r);	
+	if(r.size()>0) return true;
+	else return false;
 }
-//加入一条边，参数1是边所属顶点的id，参数2是边，可能同时操作多块，需要盯住块
-void Subgraph::add_edge(v_type id,Edge &e,char is_hash){
+//返回顶点，如果顶点不存在，则返回无效顶点，顶点id为INVALID_VERTEX
+Vertex Subgraph::get_vertex(v_type id,char is_hash){
+	b_type num;
+	Vertex *v=get_vertex_raw(id,&num,is_hash);
+	if(v==NULL){
+		return Vertex(INVALID_VERTEX);
+	}
+	return *v;	
+}
+//返回顶点的指针，不存在，则返回空指针
+Vertex* Subgraph::get_vertex_raw(v_type id,b_type *num,char is_hash){
+	//通过索引，寻找顶点所在的块
+	list<b_type> r;
+	vertex_index.find_values(id,r);
+	if(r.size()!=1) return NULL;//如果没有该顶点存在或者顶点有多个，则返回空指针
+	b_type p=*(r.begin());
+	BlockHeader<Vertex> *b=(BlockHeader<Vertex> *)get_block(p,0,is_hash);
+	uint32_t i=b->list_head;
+	while(i!=INVALID_INDEX){
+		if(b->data[i].content.id==id) {
+			*num=b->number;
+			return (Vertex *)(b->data+i);//返回指针
+		}
+		i=b->data[i].next;	
+	}			
+	return NULL;//如果遍历块还是没有，则返回空指针
+}
+//加入一条边，参数1是边所属顶点的id，参数2是边，可能同时操作多块，需要盯住块，成功了返回0，顶点不存在，失败了，返回1
+int Subgraph::add_edge(v_type id,Edge &e,char is_hash){
 	b_type num;//顶点所在的块号
 	b_type b_num;//边所在的块号
 	//获得顶点，以及顶点所在的块
-	Vertex *v=get_vertex(id,&num,is_hash);
+	Vertex *v=get_vertex_raw(id,&num,is_hash);
+	if(v==NULL) return 1;
 	//获取顶点所在的块，把此块盯住
 	BlockHeader<Vertex> *b=(BlockHeader<Vertex>*)get_block(num,0,is_hash);
 	(b->fix)++;
@@ -208,6 +368,7 @@ void Subgraph::add_edge(v_type id,Edge &e,char is_hash){
 	e.status=0;//刚插入的边的状态为0，表示存在
 	block->add_content(e);//把边加入块中	
 	block->clean=1;
+	return 0;
 } 
 //查询顶点的索引块，参数1是顶点的指针，参数2是边的目的顶点的id，参数3是顶点的块号，返回边要加入的块号，而且确保这个块肯定还能容纳边
 b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num,char is_hash){
@@ -336,10 +497,60 @@ b_type Subgraph::index_edge(Vertex* v,v_type id,b_type num,char is_hash){
 	}
 	
 }
+//根据源顶点和目的顶点，读取所有的边，结果存入到list结构中，源顶点不存在返回1，存在返回0
+int Subgraph::read_edges(v_type s_id,v_type d_id,list<Edge_u>& edges,char is_hash){
+	b_type num;
+	Vertex* v=get_vertex_raw(s_id,&num,is_hash);//得到顶点
+	if(v==NULL) return 1;
+	b_type index=v->index;
+	while(index!=INVALID_BLOCK){
+		BlockHeader<Index>* in_block=(BlockHeader<Index>*)get_block(index,0,is_hash);//获取索引块
+		//索引块里面一定有索引项
+		if(in_block->min==INVALID_VERTEX||d_id<in_block->min){
+			uint32_t item=in_block->list_head;
+			BlockHeader<Edge>* e_block=NULL;
+			while(item!=INVALID_INDEX){
+				if(in_block->data[item].content.id==INVALID_VERTEX||d_id<in_block->data[item].content.id){
+					e_block=(BlockHeader<Edge>*)get_block(in_block->data[item].content.target,0,is_hash);//获取边块
+					while(true){
+						//遍历一些块，因为可能有很多条边
+						if(e_block->get_contents(s_id,d_id,edges)){
+							b_type pre_num=e_block->pre;
+							if(pre_num!=INVALID_BLOCK) 
+								e_block=(BlockHeader<Edge>*)get_block(pre_num,0,is_hash);
+							else 
+								return 0;
+						}else
+							return 0;
+					}				
+				}else{
+					item=in_block->data[item].next;
+				}
+			}	
+		}else{
+			index=in_block->next;
+		}
+	}
+	//出了循环，说明没有这条边
+	return 0;	
+}
+//读取顶点所有的边，顶点不存在返回1，存在返回0
+int Subgraph::read_all_edges(v_type id,list<Edge_u>& edges,char is_hash){
+	b_type tmp;
+	Vertex *v=get_vertex_raw(id,&tmp,is_hash);
+	if(v==NULL) return 1;
+	b_type num=v->head;
+	while(num!=INVALID_BLOCK){
+		BlockHeader<Edge>* edge_block=(BlockHeader<Edge>*)get_block(num,0,is_hash);
+		edge_block->get_all_contents(id,edges);
+		num=edge_block->next;
+	}
+	return 0;
+}
 //根据源顶点和目的顶点，读一条边，不需要盯块
 Edge* Subgraph::read_edge(v_type s_id,v_type d_id,char is_hash){
 	b_type num;
-	Vertex* v=get_vertex(s_id,&num,is_hash);//得到顶点
+	Vertex* v=get_vertex_raw(s_id,&num,is_hash);//得到顶点
 	b_type index=v->index;
 	while(index!=INVALID_BLOCK){
 		BlockHeader<Index>* in_block=(BlockHeader<Index>*)get_block(index,0,is_hash);//获取索引块
@@ -367,11 +578,10 @@ Edge* Subgraph::read_edge(v_type s_id,v_type d_id,char is_hash){
 	//出了循环，说明没有这条边
 	return NULL;	
 }
-
 //------测试函数，根据索引来遍历顶点的边
 void Subgraph::index_output_edge(v_type id,char is_hash){
 	b_type tmp;
-	Vertex *v=get_vertex(id,&tmp,is_hash);
+	Vertex *v=get_vertex_raw(id,&tmp,is_hash);
 	b_type num=v->index;
 	while(num!=INVALID_BLOCK){
 		BlockHeader<Index>* index_block=(BlockHeader<Index>*)get_block(num,0,is_hash);
@@ -408,7 +618,7 @@ void Subgraph::all_vertex(char is_hash){
 //------------测试函数，输出顶点的所有边
 void Subgraph::output_edge(v_type id,char is_hash){
 	b_type tmp;
-	Vertex *v=get_vertex(id,&tmp,is_hash);
+	Vertex *v=get_vertex_raw(id,&tmp,is_hash);
 	b_type num=v->head;
 	while(num!=INVALID_BLOCK){
 		BlockHeader<Edge>* edge_block=(BlockHeader<Edge>*)get_block(num,0,is_hash);
@@ -418,100 +628,4 @@ void Subgraph::output_edge(v_type id,char is_hash){
 }
 
 //------------
-//得到一个块，该块号要存在，如果块缓存在cache中，则直接返回，如果没有缓存，则从文件中读取到cache，有必要的时候要移除一个cache，还没考虑到锁
-//块存在hash表中，并且创建链表，新块放置在链头，旧块放置在链尾
-//is_new代表该块是新块还是旧块，1为新块   is_hash代表要不要为该块创建hash，1为创建
-void* Subgraph::get_block(b_type number,char is_new,char is_hash){
-	c_it node_it=cache.find(number);
-	void *block;
-	Node *node;
-	if(node_it!=cache.end()){
-		//如果该块在缓存中，则返回块指针
-		return node_it->second->block;
-	}
-	else{
-		//如果该块不在缓存中，则读入该块
-		if(!(cache.size()<atoi(getenv("CACHESZ")))){
-			//如果缓存满了，则移除链表中的最后一个块，被盯住的块不能移除，删除前要判断该块是否脏了，脏了就要写入到文件
-			node=last;
-			while(node!=NULL){
-				//遍历缓存，遇到没盯住的块就停止，基本上是常数时间，被盯住的块一般是在链表头，还可以改进成LRU，但效果可能不是很明显
-				if(((BlockHeader<char>*)(node->block))->fix==0) break;
-				else node=node->pre;
-			}
-			if(node==NULL) {
-				return NULL;//如果块都被盯住，则返回空指针
-			}
-			if(((BlockHeader<char>*)(node->block))->clean==1){
-				//块脏了，则写入到文件中
-				io.seekp(get_offset(((BlockHeader<char>*)(node->block))->number));
-				io.write((char*)(node->block),head.block_size);
-			}
-			//释放块所占的内存，在缓存结构里移除，以及更新链表
-			//更新链表要分3种情况，该块在末尾，链表中，头部，！！！！！！！！多线程的时候要重点考虑这里的锁机制，假设缓存不会只有一个块，否则会有问题
-			if(node->pre==NULL){
-				//头部
-				Node *tmp=node->next;
-				tmp->pre=NULL;
-				first=tmp;
-			}else{
-				if(node->next==NULL){
-					//尾部
-					Node *tmp=node->pre;
-					tmp->next=NULL;
-					last=tmp;
-				}else{
-					//中间
-					Node *tmp_pre=node->pre;
-					Node *tmp_next=node->next;
-					tmp_pre->next=tmp_next;
-					tmp_next->pre=tmp_pre;
-				}
-			}
-			Node *tmp=node;
-			cache.erase(((BlockHeader<char>*)(node->block))->number);//在子图hash表里面移除元素
-			if(((BlockHeader<char>*)(tmp->block))->is_hash==1)
-				delete ((BlockHeader<char>*)(tmp->block))->data_hash;//释放块内的hash表内存
-			free(tmp);//释放该块所占的内存
-			delete_count++;
-		}
-		//分配内存，把块读进来	
-		node=(Node*)malloc(sizeof(Node)+head.block_size);
-		node->block=node+1;
-		block=node->block;
-		io.seekg(get_offset(number));
-		io.read((char*)(block),head.block_size);
-		((BlockHeader<char>*)block)->clean=0;//刚进来的块是干净的	
-		((BlockHeader<char>*)block)->fix=0;//刚进来的块没有被盯住
-		((BlockHeader<char>*)block)->is_hash=0;//还没有创建hash表
-		((BlockHeader<char>*)block)->data_hash=NULL;
-		if(is_new==1){
-			((BlockHeader<char>*)block)->list_head=INVALID_INDEX;//这个在block的init函数会置位的，提前是为了hash初始化的统一
-		}
-		//只有块在内存的时候，才会把块的data字段指向正确的块内容区域
-		((BlockHeader<char>*)block)->data=(Content<char>*)((BlockHeader<char>*)block+1);
-		//把块加入缓存中
-		cache[number]=node;
-		//更新链表
-		if(first==NULL){
-			first=last=node;
-			node->pre=NULL;
-			node->next=NULL;
-		}else{
-			node->pre=NULL;
-			first->pre=node;
-			node->next=first;
-			first=node;
-		}
-		if(is_hash==1){
-			char o=((BlockHeader<char>*)block)->type;
-			if(o==1)
-				((BlockHeader<Vertex>*)block)->init_hash();//创建该块的hash表
-			if(o==2)
-				((BlockHeader<Edge>*)block)->init_hash();//创建该块的hash表
-			if(o==3)
-				((BlockHeader<Index>*)block)->init_hash();//创建该块的hash表
-		}
-		return block;
-	}
-}
+

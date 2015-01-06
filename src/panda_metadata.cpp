@@ -50,7 +50,7 @@ void balance::init(){
 		vector<string> v;
 		parse_env("SLAVE_IP",v,":");
 		for(int i=0;i<v.size();i++){
-			bal.insert(pair<string,uint32_t>(v[0],0));
+			bal.insert(pair<string,uint32_t>(v[i],0));
 		}
 	}else{
 		//否则读取负载文件，初始化内存中的负载

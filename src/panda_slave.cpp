@@ -81,10 +81,13 @@ void handler_read_edge(Replier &rep){
 	Subgraph *sub=graph_set->get_subgraph(req_arg->graph_name,req_arg->s_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
 	list<Edge_u> edges;
 	int res=sub->read_edges(req_arg->s_id,req_arg->d_id,edges);
-	if(res==1){		
+	if(res==1){	
+		cout<<"no vertex"<<endl;	
 		rep.ans(STATUS_V_NOT_EXIST,"vertex not exist",strlen("vertex not exist")+1);
+		cout<<"no voer"<<endl;
 	}
 	if(res==0){
+		cout<<"ok"<<endl;
 		rep.ans(STATUS_OK,edges);	
 	}
 }

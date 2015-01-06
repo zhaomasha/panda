@@ -121,10 +121,14 @@ int main(){
 		v.id=i+3;
 		c.add_vertex(v);
 	}*/	
-	//c.add_edges(edges,&num);
-	//cout<<"success vertex :"<<num<<endl;
-	/*list<Edge_u> res;
-	c.read_edge(500,3,res);
+	/*long time_pre=getTime();
+	c.add_edges(edges,&num);
+	//c.add_vertexes(vertexes,&num);
+	cout<<"success edge :"<<num<<endl;
+	long time_next=getTime();
+	cout<<"write time "<<(time_next-time_pre)/1000.0<<endl;
+	list<Edge_u> res;
+	c.read_edge(500,5,res);
 	cout<<res.size()<<endl;
 	list<Edge_u> res_all;
 	c.read_edges(500,res_all);

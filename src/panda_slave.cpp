@@ -151,7 +151,7 @@ void* switcher(void *args)
 {
 	context_t& ctx=*(context_t*)args;//获得进程的context
 	socket_t gather_sock(ctx,ZMQ_ROUTER);
-	string slave_ip("127.0.0.1");
+	string slave_ip("192.168.11.54");
 	string slave_port(getenv("SLAVE_PORT"));
         string endpoint="tcp://"+slave_ip+":"+slave_port;
 	gather_sock.bind(endpoint.c_str());

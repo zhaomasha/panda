@@ -396,6 +396,7 @@ public:
 				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
 			num=data[num].next;
 		}
+		return flag;
 	}
 	//把该块中目标顶点是id的边存入Edge_u集合中，如果第一条边就是，那么返回1，否则返回0
 	int get_contents(v_type s_id,v_type d_id,list<Edge_u>& edges){

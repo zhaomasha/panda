@@ -82,12 +82,9 @@ void handler_read_edge(Replier &rep){
 	list<Edge_u> edges;
 	int res=sub->read_edges(req_arg->s_id,req_arg->d_id,edges);
 	if(res==1){	
-		cout<<"no vertex"<<endl;	
 		rep.ans(STATUS_V_NOT_EXIST,"vertex not exist",strlen("vertex not exist")+1);
-		cout<<"no voer"<<endl;
 	}
 	if(res==0){
-		cout<<"ok"<<endl;
 		rep.ans(STATUS_OK,edges);	
 	}
 }

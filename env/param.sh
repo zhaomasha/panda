@@ -9,6 +9,7 @@ export MASTER_IP="192.168.11.51"
 export MASTER_PORT="4444"
 export SLAVE_IP="192.168.11.51:192.168.11.52:192.168.11.54"
 export SLAVE_PORT="4445"
+export LOCAL_IP="127.0.0.1"
 
 export DIR_NAME="/home/zhaomasha/graphdata"
 export BAL_DIR_NAME=$DIR_NAME"/panda_bal"

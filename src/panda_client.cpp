@@ -23,6 +23,10 @@ socket_t* Client::find_sock(string ip){
 		c_cons.insert(pair<string,socket_t*>(ip,s));
 		return s;
 	}
+	/*socket_t* s=new socket_t(*ctx,ZMQ_REQ);
+	string endpoint="tcp://"+ip+":"+slave_port;
+	s->connect(endpoint.c_str());
+	return s;*/
 }
 //创建一个图，成功返回0，不成功返回非0，不需要和slave通信，只需要和master交互
 uint32_t Client::create_graph(string graph_name){
@@ -124,8 +128,9 @@ uint32_t Client::add_vertexes(list<Vertex_u> &vertexes,uint32_t *num){
 	//元数据查完后，就开始分别把每个ip类的边发送出去
 	if(num!=NULL) *num=0;
 	it_cl=classify.begin();
-	while(it_cl!=classify.end()){	
-		Requester req_slave(*find_sock(it_cl->first));
+	while(it_cl!=classify.end()){
+		socket_t *s=find_sock(it_cl->first);
+		Requester req_slave(*s);
 		req_slave.ask(CMD_ADD_VERTEXES,*(it_cl->second),graph_name);
 		req_slave.parse_ans();
 		if(num!=NULL){
@@ -134,6 +139,7 @@ uint32_t Client::add_vertexes(list<Vertex_u> &vertexes,uint32_t *num){
 		}
 		delete it_cl->second;//这个ip类的边插完了，则释放空间
 		it_cl++;
+		//delete s;
 	}
 	return STATUS_OK;
 }

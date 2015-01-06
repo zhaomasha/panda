@@ -110,6 +110,7 @@ public:
 		if(edges.size()==0){
 			//如果集合没有数据，可以直接返回而不和系统通信，但这个可以由用户来优化，不需要在这里做
 			sock.send(omsg[ASK_CMD],0);//如果集合没有数据，则send的参数是0，直接返回
+			return;
 		}
 		sock.send(omsg[ASK_CMD],ZMQ_SNDMORE);//如果集合有数据，则send参数是ZMQ_SNDMORE,接着发送边
 		uint32_t num=edges.size()/size;//消息的段数减1
@@ -151,6 +152,7 @@ public:
 		if(vertexes.size()==0){
 			//如果集合没有数据，可以直接返回而不和系统通信，但这个可以由用户来优化，不需要在这里做
 			sock.send(omsg[ASK_CMD],0);//如果集合没有数据，则send的参数是0，直接返回
+			return;
 		}
 		sock.send(omsg[ASK_CMD],ZMQ_SNDMORE);//如果集合有数据，则send参数是ZMQ_SNDMORE,接着发送边
 		uint32_t num=vertexes.size()/size;//消息的段数减1
@@ -327,6 +329,7 @@ public:
 		*(uint32_t*)omsg[ANS_STATUS].data()=status;
 		if(edges.size()==0){
 			sock.send(omsg[ANS_STATUS],0);//如果集合没有数据，则send的参数是0，直接返回
+			return;
 		}
 		sock.send(omsg[ANS_STATUS],ZMQ_SNDMORE);//如果集合有数据，则send参数是ZMQ_SNDMORE,接着发送边
 		uint32_t num=edges.size()/size;//消息的段数减1

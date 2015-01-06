@@ -6,4 +6,4 @@ src/client
 src/server
 src/master
 src/client.cpp
-
+src/slave

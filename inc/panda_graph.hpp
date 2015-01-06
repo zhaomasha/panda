@@ -16,7 +16,7 @@ public:
 	string subgraph_path(uint32_t key);
 	//由顶点号得到内存中的子图，如果该顶点所在的子图不存在，则创建，然后再返回，
 	//很明显，子图的创建是一个异步的过程，首先由master分配子图在哪个节点，这时候节点并没有创建子图，而是下一次客户端向master查询元数据，拿到节点ip后，再向该节点发出请求，该节点再通过该函数创建子图	
-	Subgraph* get_subgraph(v_type vertex_id);
+	Subgraph* get_subgraph(v_type vertex_id); 
 };
 
 

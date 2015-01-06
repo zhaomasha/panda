@@ -36,7 +36,7 @@ int main(){
 	long time_next=getTime();
 	cout<<"write time "<<(time_next-time_pre)/1000.0<<endl;
 	list<Edge_u> res;
-	c.read_edge(500,3,res);
+	c.read_edge(500,5,res);
 	cout<<res.size()<<endl;
 	list<Edge_u> res_all;
 	c.read_edges(500,res_all);

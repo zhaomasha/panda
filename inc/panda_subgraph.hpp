@@ -411,6 +411,7 @@ public:
 				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
 			num=data[num].next;
 		}
+		return flag;
 	}
 	//把该块中的所有的边存入到集合中
 	void get_all_contents(v_type s_id,list<Edge_u>& edges){

@@ -7,7 +7,7 @@ export INCREASZ='1'
 export CACHESZ='1000'
 export MASTER_IP="127.0.0.1"
 export MASTER_PORT="5555"
-export SLAVE_IP="127.0.0.1"
+export SLAVE_IP="127.0.0.1:192.168.11.51"
 export SLAVE_PORT="5556"
 
 export DIR_NAME="/home/zhaomasha/graphdata"

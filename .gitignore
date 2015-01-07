@@ -7,3 +7,4 @@ src/server
 src/master
 src/client.cpp
 src/slave
+env/param.sh

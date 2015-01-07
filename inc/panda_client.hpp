@@ -41,10 +41,14 @@ public:
 	uint32_t add_edge(Edge_u &e);
 	//增加多条边，成功则返回0（STATUS_OK），num存储插入成功的边的数目,图不存在或者为空，则返回STATUS_NOT_EXIST
 	uint32_t add_edges(list<Edge_u> &edges,uint32_t *num=NULL);
+	//多线程，增加多条边，成功则返回0（STATUS_OK），num存储插入成功的边的数目,图不存在或者为空，则返回STATUS_NOT_EXIST
+	uint32_t add_edges_pthread(list<Edge_u> &edges,uint32_t *num=NULL);
 	//返回两个顶点之间所有的边，成功则返回0（STATUS_OK）,顶点不存在返回大于0（STATUS_V_NOT_EXIST）,图不存在或者为空，则返回STATUS_NOT_EXIST
 	uint32_t read_edge(v_type s_id,v_type d_id,list<Edge_u> &edges);
 	//返回一个顶点所有的边，成功则返回0（STATUS_OK）,顶点不存在返回大于0（STATUS_V_NOT_EXIST）,图不存在或者为空，则返回STATUS_NOT_EXIST
 	uint32_t read_edges(v_type id,list<Edge_u> &edges);
+	//查询多条边，成功则返回0（STATUS_OK）,图不存在或者为空，则返回STATUS_NOT_EXIST
+	uint32_t read_two_edges(list<Two_vertex>& vertexes,list<Edge_u>& edges);
 
 	//缓存中查询元数据，不存在，则返回空串
 	string cache_get_meta(string graph_name,uint32_t key);
@@ -55,9 +59,16 @@ public:
 	//缓存中添加一个图
 	void cache_add_graph(string graph_name);
 	//测试，输出缓存
-	void print();
+	void print();	
 };
-
-
+class Ip_Edges{
+public:
+	string graph_name;
+	socket_t *sock;
+	list<Edge_u>* edges;//待添加的边
+	uint32_t num;//该ip的节点添加边成功的数目
+};
+//添加顶点的线程函数，不能写成成员函数，成员函数不能作为线程入口
+void* thread_add_edges(void* args);
 
 #endif

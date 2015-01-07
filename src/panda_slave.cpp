@@ -101,6 +101,21 @@ void handler_read_edges(Replier &rep){
 		rep.ans(STATUS_OK,edges);	
 	}
 }
+//处理批量read边的函数，边都属于一个图
+void handler_read_two_edges(Replier &rep){
+	string graph_name=rep.get_graph_name();
+	list<Two_vertex> &vertexes=rep.get_two_vertexes();
+	list<Two_vertex>::iterator it=vertexes.begin();
+	Subgraph *sub;
+	uint32_t num=0;
+	list<Edge_u> edges;
+	while(it!=vertexes.end()){
+		sub=graph_set->get_subgraph(graph_name,(*it).s_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
+		sub->read_edges((*it).s_id,(*it).d_id,edges);
+		it++;
+	}
+	rep.ans(STATUS_OK,edges);
+}
 //工作线程的函数，每一个线程一个套接字
 void * worker(void* args)
 {
@@ -138,6 +153,10 @@ void * worker(void* args)
 				}
 				case CMD_READ_EDGES:{
 					handler_read_edges(rep);			
+					break;
+				}
+				case CMD_READ_TWO_EDGES:{
+					handler_read_two_edges(rep);			
 					break;
 				}
 			}

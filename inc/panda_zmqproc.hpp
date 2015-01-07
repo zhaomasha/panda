@@ -7,7 +7,7 @@
 using namespace zmq;
 
 enum{ASK_CMD,ASK_ARG,ASK_SIZE};//请求包括两个字段，一个是命令，一个是参数，具体参数是什么，根据命令的类型决定
-enum{CMD_CREATE_GRAPH,CMD_GRAPH_IN,CMD_GET_META,CMD_ADD_VERTEX,CMD_ADD_EDGE,CMD_READ_EDGE,CMD_ADD_EDGES,CMD_ADD_VERTEXES,CMD_READ_EDGES};//这是命令的类型
+enum{CMD_CREATE_GRAPH,CMD_GRAPH_IN,CMD_GET_META,CMD_ADD_VERTEX,CMD_ADD_EDGE,CMD_READ_EDGE,CMD_ADD_EDGES,CMD_ADD_VERTEXES,CMD_READ_EDGES,CMD_READ_TWO_EDGES};//这是命令的类型
 enum{ANS_STATUS,ANS_DATA,ANS_SIZE};//响应包括两个字段，一个是状态，一个是数据，具体数据是什么，根据请求的类型决定
 enum{STATUS_OK,STATUS_EXIST,STATUS_NOT_EXIST,STATUS_V_EXIST,STATUS_V_NOT_EXIST};//这是相应的状态的类型
 //下面都是通信的消息体
@@ -63,6 +63,7 @@ public:
 		this->s_id=s_id;
 		this->d_id=d_id;
 	}
+	proto_two_vertex_u(){}
 };
 //slave的ip，client和master暂时设计成只涉及到元数据，也就是client给master一个图和顶点，master返回该图的顶点所在的节点
 class proto_ip{
@@ -186,6 +187,49 @@ public:
 		memcpy(omsg[ASK_ARG].data(),coms,num_mod*sizeof(proto_graph_vertex_u));//把要发送的内容复制给消息体
 		sock.send(omsg[ASK_ARG],0);
 	}
+	//向同一ip批量请求读取同一张图的多条边
+	void ask(uint32_t cmd,list<Two_vertex> &vertexes,string graph_name){
+		zmq::message_t omsg[ASK_SIZE];//两个消息体，一个传输命令，一个传输参数
+		omsg[ASK_CMD].rebuild(sizeof(uint32_t));
+		*(uint32_t*)omsg[ASK_CMD].data()=cmd;
+		if(vertexes.size()==0){
+			//如果集合没有数据，可以直接返回而不和系统通信，但这个可以由用户来优化，不需要在这里做
+			sock.send(omsg[ASK_CMD],0);//如果集合没有数据，则send的参数是0，直接返回
+			return;
+		}
+		sock.send(omsg[ASK_CMD],ZMQ_SNDMORE);//如果集合有数据，则send参数是ZMQ_SNDMORE,接着发送边
+		uint32_t num=vertexes.size()/size;//消息的段数减1
+		uint32_t num_mod=vertexes.size()%size;//最后一个消息段的边的数目
+		if(num_mod==0) {
+			num-=1;//如果模是0，说明之前的num是消息的段数，而不是段数减1
+			num_mod=size;//最后一段，模为size
+		}
+		//内容的转换，客户端的数据转换为通信中间层的数据
+		proto_two_vertex_u coms[size];//要发送的内容	
+		list<Two_vertex>::iterator it=vertexes.begin();
+		uint32_t i=0,j;
+		while(i<num){
+			//发送完整的消息段
+			for(j=0;j<size;j++){
+				coms[j]=proto_two_vertex_u(graph_name,(*it).s_id,(*it).d_id);//把集合中的边复制到数组的边中
+				it++;	
+			}
+			//复制完size个后，就发送
+			omsg[ASK_ARG].rebuild(size*sizeof(proto_two_vertex_u));//发送前先重构消息
+			memcpy(omsg[ASK_ARG].data(),coms,size*sizeof(proto_two_vertex_u));//把要发送的内容复制给消息体
+			sock.send(omsg[ASK_ARG],ZMQ_SNDMORE);
+			i++;
+		}
+		//发送最后一个消息段
+		for(j=0;j<num_mod;j++){
+			coms[j]=proto_two_vertex_u(graph_name,(*it).s_id,(*it).d_id);//把集合中的边复制到数组的边中
+			it++;	
+		}
+		//发送
+		omsg[ASK_ARG].rebuild(num_mod*sizeof(proto_two_vertex_u));//发送前先重构消息
+		memcpy(omsg[ASK_ARG].data(),coms,num_mod*sizeof(proto_two_vertex_u));//把要发送的内容复制给消息体
+		sock.send(omsg[ASK_ARG],0);
+	}
 	//接收消息，填充状态和数据两个字段
 	bool parse_ans(){
 		int i=0;
@@ -270,7 +314,7 @@ public:
 			return;
 		}
 		if(get_cmd()==CMD_ADD_VERTEXES){
-			//如果是批量添加边的命令，则要多次接受消息段
+			//如果是批量添加顶点的命令，则要多次接受消息段
 			if(imsg[ASK_CMD].more()==0) return;//如果后续没有消息段了，直接返回，说明没有数据了
 			int i=0;
 			do{
@@ -287,6 +331,25 @@ public:
 			}while(imsg[ASK_ARG].more());
 			return;
 		}
+		if(get_cmd()==CMD_READ_TWO_EDGES){
+			//如果是批量读取边的命令，则要多次接受消息段
+			if(imsg[ASK_CMD].more()==0) return;//如果后续没有消息段了，直接返回，说明没有数据了
+			int i=0;
+			do{
+				imsg[ASK_ARG].rebuild();//用之前先把消息体重建
+				sock.recv(imsg[ASK_ARG],0);//接收消息段
+				//解析消息段，把消息里面的边存入到集合中
+				int num=get_arg_size()/sizeof(proto_graph_vertex_u);//计算消息段中消息体的数目
+				int j;
+				proto_two_vertex_u *protos=(proto_two_vertex_u*)get_arg();
+				for(j=0;j<num;j++){
+					graph_name=protos[j].graph_name;
+					Two_vertex t(protos[j].s_id,protos[j].d_id);
+					two_vertexes.push_back(t);
+				}
+			}while(imsg[ASK_ARG].more());
+			return;
+		}	
 		//如果不是批量处理的命令，则只需要接收一次消息段
 		sock.recv(imsg[ASK_ARG],0);
 		
@@ -310,6 +373,9 @@ public:
 	}
 	list<Vertex_u>& get_vertexes(){
 		return vertexes;
+	}
+	list<Two_vertex>& get_two_vertexes(){
+		return two_vertexes;
 	}
 	//回复客户端两个数据段，一个状态，一个说明数据
 	void ans(uint32_t status,const void* data,size_t size){
@@ -368,6 +434,7 @@ private:
 	zmq::message_t imsg[ASK_SIZE];
 	list<Edge_u> edges;//批处理操作时，存放边的集合
 	list<Vertex_u> vertexes;//批处理操作时，存放顶点的集合
+	list<Two_vertex> two_vertexes;//批处理操作时，存放源顶点和目的顶点的类集合
 	string graph_name;//批处理操作时，记录要操作的图
 	const uint32_t size;//发送数据时，每个消息段最多容纳的边或者顶点的数目
 	Replier(Replier const&);

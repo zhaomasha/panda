@@ -25,6 +25,12 @@ public:
 	}
 	Edge_u(){}
 };
-
+class Two_vertex{
+public:
+	v_type s_id;
+	v_type d_id;
+	Two_vertex(v_type s_id,v_type d_id):s_id(s_id),d_id(d_id){}
+	Two_vertex(){}
+};
 
 #endif

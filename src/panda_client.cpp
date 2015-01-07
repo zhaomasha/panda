@@ -188,7 +188,8 @@ uint32_t Client::add_edges_pthread(list<Edge_u> &edges,uint32_t *num){
 		datas[index].sock=find_sock(it_cl->first);
 		datas[index].edges=it_cl->second;
 		datas[index].num=0;
-		pthread_create(&threads[index],NULL,thread_add_edges,&datas[index]);		
+		pthread_create(&threads[index],NULL,thread_add_edges,&datas[index]);	
+		index++;	
 		it_cl++;
 	}
 	//等待线程的运行完成

@@ -208,6 +208,7 @@ uint32_t Client::add_edges_pthread(list<Edge_u> &edges,uint32_t *num){
 		delete datas[index].edges;
 	}
 	delete[] datas;
+	delete[] threads;
 	return STATUS_OK;
 }
 //批量增加边，如果num不为空，则存储实际添加的边的数目，因为有些顶点可能不存在，添加就会失败
@@ -269,6 +270,62 @@ uint32_t Client::read_edges(v_type id,list<Edge_u>& edges){
 	req_slave.ask(CMD_READ_EDGES,&mes_slave,sizeof(proto_graph_vertex));
 	req_slave.parse_ans(edges);
 	return req_slave.get_status();
+}
+//查询边的线程入口
+void* thread_read_two_edges(void *args){
+	Ip_Two_Vertex* ip_two_vertex=(Ip_Two_Vertex*)args;
+	Requester req_slave(*ip_two_vertex->sock);
+	req_slave.ask(CMD_READ_TWO_EDGES,*(ip_two_vertex->vertexes),ip_two_vertex->graph_name);
+	req_slave.parse_ans(*(ip_two_vertex->edges));
+}
+//多线程批量读取边
+uint32_t Client::read_two_edges_pthread(list<Two_vertex>& vertexes,list<Edge_u> **edges,uint32_t *size){	
+	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
+	//找所有边的元数据，由于有缓存，这个操作不会成为瓶颈。边在获取元数据的时候按照ip分类
+	unordered_map<string,list<Two_vertex>*> classify;
+	list<Two_vertex>::iterator it=vertexes.begin();
+	unordered_map<string,list<Two_vertex>*>::iterator it_cl;
+	string ip;
+	while(it!=vertexes.end()){
+		ip=get_meta(graph_name,(*it).s_id);
+		it_cl=classify.find(ip);
+		if(it_cl==classify.end()){
+			//如果没有这个ip类，则创建，然后把边加入到该ip类
+			classify.insert(pair<string,list<Two_vertex>*>(ip,new list<Two_vertex>()));
+			it_cl=classify.find(ip);
+			it_cl->second->push_back(*it);	
+		}else{
+			it_cl->second->push_back(*it);	
+		}
+		it++;
+	}
+	//元数据查完后，就开始分别把每个ip类的顶点对发送出去，多线程的发送，所以要给每个线程数据
+	*size=classify.size();
+	*edges=new list<Edge_u>[*size];
+	Ip_Two_Vertex* datas=new Ip_Two_Vertex[*size];
+	uint32_t index=0;
+	pthread_t *threads=new pthread_t[*size];
+	it_cl=classify.begin();
+	while(it_cl!=classify.end()){
+		datas[index].graph_name=graph_name;
+		datas[index].sock=find_sock(it_cl->first);
+		datas[index].vertexes=it_cl->second;
+		datas[index].edges=&(*edges)[index];
+		pthread_create(&threads[index],NULL,thread_read_two_edges,&datas[index]);	
+		index++;	
+		it_cl++;
+	}
+	//等待线程的运行完成
+	for(index=0;index<*size;index++){
+		pthread_join(threads[index],NULL);
+	}
+	//清理内存
+	for(index=0;index<*size;index++){
+		delete datas[index].vertexes;
+	}
+	delete[] datas;
+	delete[] threads;
+	return STATUS_OK;
 }
 //批量读取边，返回所有的边，源顶点和目的顶点就没有规律了，还要在上面封装接口来读取某个源顶点和目的顶点的边，也可以由用户完成
 //如果vertexes是空，则不会发送请求

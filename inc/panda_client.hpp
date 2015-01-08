@@ -49,6 +49,8 @@ public:
 	uint32_t read_edges(v_type id,list<Edge_u> &edges);
 	//查询多条边，成功则返回0（STATUS_OK）,图不存在或者为空，则返回STATUS_NOT_EXIST
 	uint32_t read_two_edges(list<Two_vertex>& vertexes,list<Edge_u>& edges);
+	//多线程，批量查询多条边，参数是集合的数组，size是数组的大小
+	uint32_t read_two_edges_pthread(list<Two_vertex>& vertexes,list<Edge_u>** edges,uint32_t *size);
 
 	//缓存中查询元数据，不存在，则返回空串
 	string cache_get_meta(string graph_name,uint32_t key);
@@ -68,7 +70,15 @@ public:
 	list<Edge_u>* edges;//待添加的边
 	uint32_t num;//该ip的节点添加边成功的数目
 };
+class Ip_Two_Vertex{
+public:
+	string graph_name;
+	socket_t *sock;
+	list<Two_vertex>* vertexes;//待添加的边
+	list<Edge_u>* edges;//存放返回的边,每个线程单独的
+};
 //添加顶点的线程函数，不能写成成员函数，成员函数不能作为线程入口
 void* thread_add_edges(void* args);
+void* thread_read_two_edges(void* args);
 
 #endif

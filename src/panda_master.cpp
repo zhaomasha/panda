@@ -95,6 +95,7 @@ void* worker(void *args)
 			Replier rep(sock);
 			//没有消息，会block在这
 			rep.parse_ask();
+			cout<<rep.get_cmd()<<endl;
 			switch(rep.get_cmd()){
 				case CMD_CREATE_GRAPH:{
 					handler_create_graph(rep);	

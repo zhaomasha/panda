@@ -111,7 +111,8 @@ void handler_read_two_edges(Replier &rep){
 	list<Edge_u> edges;
 	while(it!=vertexes.end()){
 		sub=graph_set->get_subgraph(graph_name,(*it).s_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
-		sub->read_edges((*it).s_id,(*it).d_id,edges);
+		//sub->read_edges((*it).s_id,(*it).d_id,edges);
+		sub->read_all_edges((*it).s_id,edges);
 		it++;
 	}
 	rep.ans(STATUS_OK,edges);

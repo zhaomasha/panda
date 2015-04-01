@@ -4,7 +4,7 @@
 #include "panda_zmqproc.hpp"
 using namespace zmq;
 Graph_set *graph_set;
-pthread_t thread_worker,thread_switcher;
+pthread_t thread_worker,thread_worker1,thread_switcher;
 //进程退出函数
 void kill_func(int signum){
 	delete graph_set;//释放空间，各种析构，把内存中的内容更新到文件中去
@@ -130,7 +130,7 @@ void * worker(void* args)
 			//没有消息，会block在这
 			cout<<"waiting for request"<<endl;
 			rep.parse_ask();
-			cout<<"cmd "<<rep.get_cmd()<<endl;
+			cout<<pthread_self()<<" cmd "<<rep.get_cmd()<<endl;
 			switch(rep.get_cmd()){
 				case CMD_ADD_VERTEX:{
 					handler_add_vertex(rep);			
@@ -192,8 +192,10 @@ int main(){
 	pthread_create(&thread_switcher,NULL,switcher,&ctx);
 	sleep(1);
 	pthread_create(&thread_worker,NULL,worker,&ctx);
+	pthread_create(&thread_worker1,NULL,worker,&ctx);
 	pthread_join(thread_switcher,NULL);
 	pthread_join(thread_worker,NULL);
+	pthread_join(thread_worker1,NULL);
 }
 
 

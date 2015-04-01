@@ -41,5 +41,23 @@ string graph_key(char*path){
 	int begin=strlen(getenv("DIR_NAME"))+1;
 	return string(path+begin);
 }
-
+lock_t* Getlock(){
+        return (lock_t*)malloc(sizeof(lock_t));
+}
+void Lock(lock_t *lock){
+        pthread_mutex_lock(lock);
+}
+void Unlock(lock_t *lock){
+        pthread_mutex_unlock(lock);
+}
+void Initlock(lock_t *lock,void *p){
+        pthread_mutex_init(lock,(pthread_mutexattr_t*)p);
+}
+void Destroylock(lock_t *lock){
+        pthread_mutex_destroy(lock);
+}
+//获得锁，返回0，否则返回非0的错误码
+int Trylock(lock_t *lock){
+        return pthread_mutex_trylock(lock);
+}
 

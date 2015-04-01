@@ -24,7 +24,7 @@ public:
 	socket_t* find_sock(string ip);
 	//创建一个图，成功返回0（STATUS_OK），图已经存在，则不成功返回大于0（STATUS_EXIST）
 	uint32_t create_graph(string graph_name);
-	//判断图是否存在
+	//判断图是否存在，存在返回true
 	bool graph_is_in(string graph_name);
 	//连接一个图，只有连接了一个图后，才能开始操作图。只是会查询图存不存在，然后是对Cliet对象中的graph_name字段赋值，如果失败，则代表该图不存在，则字段还是原来的值，连接的还是原来的图
 	bool connect(string graph_name);

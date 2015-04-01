@@ -9,6 +9,7 @@
 #include "panda_head.hpp"
 #include "panda_bplus.hpp"
 #include "panda_type.hpp"
+#include "panda_util.hpp"
 
 class Vertex;
 class Edge;
@@ -38,6 +39,10 @@ public:
 	Node* last;//内存中块链表的尾
 	int delete_count;//测试用，缓存替换的次数 
 	Btree<v_type,b_type> vertex_index;//顶点的索引类
+        lock_t *require_lock;//申请一个块操作的锁
+        lock_t *getblock_lock;//获取一个块操作的锁
+        lock_t *cache_lock;//对cache操作的锁
+        lock_t *vertex_lock;//对顶点的操作是串行，加锁
 public:
 	//创建一个子图的文件，初始化大小可以配置，返回0表示成功，返回1表示失败
         int init(string filename,string dir);
@@ -47,6 +52,10 @@ public:
 	void format(uint32_t blocksize=atoi(getenv("BLOCKSZ")));
         //已有子图文件的情况下，读取一个子图到内存
 	void recover(string name,string dir);
+        //初始化锁
+        void init_locks();
+        //释放锁
+        void free_locks();
 	//通过子图目录和子图名字得到子图key
 	string get_sub_key(string name,string dir);
 	//析构函数，把内存中的子图内容写到文件中去
@@ -59,8 +68,16 @@ public:
 	b_type require(uint32_t type);
         //有空闲块的时候，申请一个块号
 	b_type requireRaw(uint32_t type);
+        //根据缓存中的块，得到该块的包装节点node类
+        Node *block2node(void*block);
+        //给块释放锁
+        void unlock2block(void*block); 
+        //根据缓存中的块，得到该块的包装节点node类
+        Node *num2node(b_type num);
+        //给块释放锁
+        void unlock2num(b_type num);
         //根据块号得到一个块，块已经读入缓存中 
-	void* get_block(b_type number,char is_new,char is_hash);
+	void* get_block(b_type number,char is_new,char is_hash,int is_lock=1);
 
         //增加一个顶点，并更新顶点索引，顶点已经存在返回1，不存在则插入然后返回0
 	int add_vertex(Vertex& vertex,char is_hash=0);

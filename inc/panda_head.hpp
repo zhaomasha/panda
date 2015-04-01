@@ -47,7 +47,7 @@
 #include<netdb.h>
 
 #include<arpa/inet.h>
-
+#include<pthread.h>
 
 using namespace std;
 using namespace std::tr1;
@@ -56,6 +56,7 @@ typedef uint64_t v_type;//顶点id的类型
 typedef uint32_t e_type;//边数目的类型
 typedef uint32_t b_type;//块id的类型
 typedef uint64_t t_type;//时间戳的类型
+typedef pthread_mutex_t lock_t;//锁的类型
 typedef fstream::pos_type f_type;//文件偏移的类型
 static v_type V_ZERO=0;
 static b_type B_ZERO=0;
@@ -70,6 +71,7 @@ public:
 	void *block;
 	Node *pre;
 	Node *next;
+        lock_t *lock;//缓存中每个block有一个锁
 }__attribute__((packed));
 
 typedef unordered_map<b_type,Node*> c_type;//子图内存储块的hash结构

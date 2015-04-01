@@ -1,0 +1,3 @@
+g++ -o panda_server panda_master.cpp panda_util.cpp panda_metadata.cpp panda_split_method.cpp -I../inc/ -lzmq -lpthread
+g++ -o panda_slave panda_slave.cpp panda_subgraph.cpp panda_graph.cpp panda_graph_set.cpp panda_split_method.cpp panda_util.cpp -I../inc/ -lzmq -lpthread
+g++ test.cpp panda_client.cpp panda_split_method.cpp -I../inc  -lzmq

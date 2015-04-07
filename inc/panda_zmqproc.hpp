@@ -7,7 +7,7 @@
 using namespace zmq;
 
 enum{ASK_CMD,ASK_ARG,ASK_SIZE};//请求包括两个字段，一个是命令，一个是参数，具体参数是什么，根据命令的类型决定
-enum{CMD_CREATE_GRAPH,CMD_GRAPH_IN,CMD_GET_META,CMD_ADD_VERTEX,CMD_ADD_EDGE,CMD_READ_EDGE,CMD_ADD_EDGES,CMD_ADD_VERTEXES,CMD_READ_EDGES,CMD_READ_TWO_EDGES};//这是命令的类型
+enum{CMD_CREATE_GRAPH,CMD_GRAPH_IN,CMD_GET_META,CMD_ADD_VERTEX,CMD_ADD_EDGE,CMD_READ_EDGE,CMD_ADD_EDGES,CMD_ADD_VERTEXES,CMD_READ_EDGES,CMD_READ_TWO_EDGES,CMD_READ_EDGE_INDEX,CMD_GET_ALL_VERTEX_NUM,CMD_READ_VERTEX};//这是命令的类型
 enum{ANS_STATUS,ANS_DATA,ANS_SIZE};//响应包括两个字段，一个是状态，一个是数据，具体数据是什么，根据请求的类型决定
 enum{STATUS_OK,STATUS_EXIST,STATUS_NOT_EXIST,STATUS_V_EXIST,STATUS_V_NOT_EXIST};//这是相应的状态的类型
 //下面都是通信的消息体
@@ -20,6 +20,22 @@ public:
 		memcpy(graph_name,name.c_str(),name.size()+1);
 		vertex_id=id;
 	}
+};
+//边的属性
+class proto_blog_id{
+public:
+        char graph_name[20];
+	char blog_id[BLOGID_LEN+1];
+	proto_blog_id(string name,string blog_id){
+                if(blog_id.length()>BLOGID_LEN){
+                    //如果blog_id的长度超过规定值了，就截取规定值的长度
+                    strcpy(this->blog_id,blog_id.substr(0,BLOGID_LEN).c_str());
+                }else{
+                    strcpy(this->blog_id,blog_id.c_str());
+                }
+		memcpy(graph_name,name.c_str(),name.size()+1);
+	}
+        proto_blog_id(){}
 };
 //图的名字和顶点，向slave发送的消息体
 class proto_graph_vertex_u{
@@ -35,6 +51,12 @@ public:
 		memcpy(graph_name,vertex_u.graph_name,strlen(vertex_u.graph_name)+1);
 		vertex=vertex_u.vertex;
 	}
+};
+//
+class proto_vertex_num{
+public:
+        Vertex_u vertex;
+        uint32_t num;
 };
 //图的一条边，向slave发送的消息体
 class proto_edge_u{

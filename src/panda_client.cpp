@@ -69,7 +69,7 @@ bool Client::connect(string graph_name){
 string Client::current_graph(){
 	return graph_name;
 }
-//查询元数据，返回顶点所在的ip
+//查询元数据，返回顶点所在的ip，跟master获取
 string Client::get_meta(string graph_name,v_type id){
 	//先在缓存中找，没找到再去master询问
 	uint32_t key=get_subgraph_key(id);//得到顶点所在的子图
@@ -87,7 +87,10 @@ string Client::get_meta(string graph_name,v_type id){
 	}
 	return ip;
 }
-
+//查询所有的slave节点的ip，从配置文件获取，不跟master要
+void Client::get_all_meta(vector<string> &ips){
+        parse_env("SLAVE_IP",ips,":");
+}
 //增加一个顶点
 uint32_t Client::add_vertex(Vertex_u &v){
 	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
@@ -136,6 +139,23 @@ uint32_t Client::add_vertexes(list<Vertex_u> &vertexes,uint32_t *num){
 		it_cl++;
 	}
 	return STATUS_OK;
+}
+//查询顶点的信息，如果顶点存在则返回ok状态，不存在返回
+uint32_t Client::read_vertex(v_type id,Vertex_u& v,uint32_t *num){
+	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
+	//如果连接图了，则首先找图和顶点的元数据，先在缓存中找，没找到再去master询问
+	string ip=get_meta(graph_name,id);
+	Requester req_slave(*find_sock(ip));
+	proto_graph_vertex mes_slave(graph_name,id);
+	req_slave.ask(CMD_READ_VERTEX,&mes_slave,sizeof(proto_graph_vertex));
+	req_slave.parse_ans();
+        uint32_t res=req_slave.get_status();
+        if(res==STATUS_OK){
+	    proto_vertex_num *mes=(proto_vertex_num*)req_slave.get_data(); 
+            v=mes->vertex;
+            *num=mes->num; 
+        }
+        return res;
 }
 //增加一条边，顶点不存在的时候不会自动创建顶点，添加边就会失败
 uint32_t Client::add_edge(Edge_u &e){
@@ -211,6 +231,41 @@ uint32_t Client::add_edges_pthread(list<Edge_u> &edges,uint32_t *num){
 	delete[] threads;
 	return STATUS_OK;
 }
+//查询顶点数目的线程函数
+void* thread_get_vertex_num(void *args){
+	Ip_Graph* ip_graph=(Ip_Graph*)args;
+	Requester req_slave(*ip_graph->sock);
+        proto_graph ask_arg(ip_graph->graph_name);
+	req_slave.ask(CMD_GET_ALL_VERTEX_NUM,&(ask_arg),sizeof(proto_graph));
+	req_slave.parse_ans();
+	*(ip_graph->nums)=atoi((char*)req_slave.get_data());
+}
+//多线程查询顶点数目
+uint32_t Client::get_vertex_num_pthread(uint32_t **nums,uint32_t *size){	
+	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
+        //获取所有节点的ip
+        vector<string> ips;
+        get_all_meta(ips);
+	//多线程的发送，所以要给每个线程数据
+	*size=ips.size();
+	*nums=new uint32_t[*size];
+	Ip_Graph* datas=new Ip_Graph[*size];
+	uint32_t index=0;
+	pthread_t *threads=new pthread_t[*size];
+	for(int index=0;index<*size;index++){
+		datas[index].graph_name=graph_name;
+		datas[index].sock=find_sock(ips[index]);
+                datas[index].nums=&(*nums)[index];
+		pthread_create(&threads[index],NULL,thread_get_vertex_num,&datas[index]);
+	}
+	//等待线程的运行完成
+	for(index=0;index<*size;index++){
+		pthread_join(threads[index],NULL);
+	}
+	delete[] datas;
+	delete[] threads;
+	return STATUS_OK;
+}
 //批量增加边，如果num不为空，则存储实际添加的边的数目，因为有些顶点可能不存在，添加就会失败
 uint32_t Client::add_edges(list<Edge_u> &edges,uint32_t *num){	
 	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
@@ -270,6 +325,41 @@ uint32_t Client::read_edges(v_type id,list<Edge_u>& edges){
 	req_slave.ask(CMD_READ_EDGES,&mes_slave,sizeof(proto_graph_vertex));
 	req_slave.parse_ans(edges);
 	return req_slave.get_status();
+}
+//查询具有某属性的所有边的线程入口
+void* thread_read_edge_index(void *args){
+	Ip_Blog_ID* ip_blog_id=(Ip_Blog_ID*)args;
+	Requester req_slave(*ip_blog_id->sock);
+	req_slave.ask(CMD_READ_EDGE_INDEX,&(ip_blog_id->blog_id),sizeof(proto_blog_id));
+	req_slave.parse_ans(*(ip_blog_id->edges));
+}
+//多线程批量读取具有某属性的所有边
+uint32_t Client::read_edge_index_pthread(string id,list<Edge_u> **edges,uint32_t *size){	
+	if(current_graph()=="") return STATUS_NOT_EXIST;//如果还没有连接图，则返回状态STATUS_NOT_EXIST
+        //获取所有节点的ip
+        vector<string> ips;
+        get_all_meta(ips);
+        //构造参数proto_blog_id，长度超过后，就会截取
+        proto_blog_id blog_id(graph_name,id); 
+	//多线程的发送，所以要给每个线程数据
+	*size=ips.size();
+	*edges=new list<Edge_u>[*size];
+	Ip_Blog_ID* datas=new Ip_Blog_ID[*size];
+	uint32_t index=0;
+	pthread_t *threads=new pthread_t[*size];
+	for(int index=0;index<*size;index++){
+		datas[index].blog_id=blog_id;
+		datas[index].sock=find_sock(ips[index]);
+		datas[index].edges=&(*edges)[index];
+		pthread_create(&threads[index],NULL,thread_read_edge_index,&datas[index]);
+	}
+	//等待线程的运行完成
+	for(index=0;index<*size;index++){
+		pthread_join(threads[index],NULL);
+	}
+	delete[] datas;
+	delete[] threads;
+	return STATUS_OK;
 }
 //查询边的线程入口
 void* thread_read_two_edges(void *args){

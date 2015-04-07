@@ -2,6 +2,7 @@
 #include "panda_graph_set.hpp"
 #include "panda_zmq.hpp"
 #include "panda_zmqproc.hpp"
+#include "panda_type.hpp"
 using namespace zmq;
 Graph_set *graph_set;
 pthread_t thread_worker,thread_worker1,thread_switcher;
@@ -21,6 +22,7 @@ void handler_add_vertex(Replier &rep){
 		rep.ans(STATUS_V_EXIST,"vertex exist",strlen("vertex exist")+1);
 	}
 	if(res==0){
+                graph_set->get_graph(req_arg->graph_name)->vertex_num_increment();
 		rep.ans(STATUS_OK,"ok",strlen("ok")+1);
 	} 	
 }
@@ -35,7 +37,10 @@ void handler_add_vertexes(Replier &rep){
 		sub=graph_set->get_subgraph(graph_name,(*it).id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
 		Vertex v(*it);
 		int res=sub->add_vertex(v);
-		if(res==0) num++;//添加成功，记录一笔
+		if(res==0){
+                    graph_set->get_graph(graph_name)->vertex_num_increment();
+                    num++;//添加成功，记录一笔
+                }
 		it++;
 	}
 	ostringstream stream_num;
@@ -44,6 +49,7 @@ void handler_add_vertexes(Replier &rep){
 	rep.ans(STATUS_OK,string_num.c_str(),string_num.size()+1);
 }
 //处理添加边的函数，如果边的源顶点不存在，则返回错误的状态，如果成功插入，则返回ok状态
+//加边的同时，如果成功，要添加边的属性索引，边的属性索引是针对整个图的，而不是子图
 void handler_add_edge(Replier &rep){
 	proto_edge_u *req_arg=(proto_edge_u*)rep.get_arg();//获取参数
 	Subgraph *sub=graph_set->get_subgraph(req_arg->graph_name,req_arg->edge.s_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
@@ -53,10 +59,16 @@ void handler_add_edge(Replier &rep){
 		rep.ans(STATUS_V_NOT_EXIST,"vertex not exist",strlen("vertex not exist")+1);
 	}
 	if(res==0){
+                //添加边属性的索引
+                Graph *graph=graph_set->get_graph(req_arg->graph_name);
+                Key k(req_arg->edge.blog_id);
+                Value v(req_arg->edge.s_id,req_arg->edge.d_id);
+                graph->add_edge_index(k,v); 
 		rep.ans(STATUS_OK,"ok",strlen("ok")+1);
 	}
 }
 //处理批量添加边的函数，边都属于一个图
+//加边的同时，如果成功，要添加边的属性索引，边的属性索引是针对整个图的，而不是子图
 void handler_add_edges(Replier &rep){
 	string graph_name=rep.get_graph_name();
 	list<Edge_u> &edges=rep.get_edges();
@@ -67,10 +79,27 @@ void handler_add_edges(Replier &rep){
 		sub=graph_set->get_subgraph(graph_name,(*it).s_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
 		Edge e(*it);
 		int res=sub->add_edge((*it).s_id,e);
-		if(res==0) num++;//添加成功，记录一笔
+		if(res==0) {
+                      //添加边属性的索引
+                      Graph *graph=graph_set->get_graph(graph_name);
+                      Key k((*it).blog_id);
+                      Value v((*it).s_id,(*it).d_id);
+                      graph->add_edge_index(k,v); 
+                      num++;//添加成功，记录一笔
+                }
 		it++;
 	}
 	ostringstream stream_num;
+	stream_num<<num;
+	string string_num=stream_num.str();
+	rep.ans(STATUS_OK,string_num.c_str(),string_num.size()+1);
+}
+//处理查找该子图的某个图的顶点数目的函数
+void handler_get_vertex_num(Replier &rep){
+	proto_graph *req_arg=(proto_graph*)rep.get_arg();
+        Graph *graph=graph_set->get_graph(req_arg->graph_name);
+        uint32_t num=graph->vertex_num; 
+        ostringstream stream_num;
 	stream_num<<num;
 	string string_num=stream_num.str();
 	rep.ans(STATUS_OK,string_num.c_str(),string_num.size()+1);
@@ -101,6 +130,23 @@ void handler_read_edges(Replier &rep){
 		rep.ans(STATUS_OK,edges);	
 	}
 }
+//读取顶点，如果顶点不存在，则返回错误的状态，如果存在，则返回ok状态和顶点的信息
+void handler_read_vertex(Replier &rep){
+	proto_graph_vertex *req_arg=(proto_graph_vertex*)rep.get_arg();
+	Subgraph *sub=graph_set->get_subgraph(req_arg->graph_name,req_arg->vertex_id);//得到该图该顶点所在的子图，子图不存在，则会创建一个
+        Vertex_u v;
+        uint32_t num;
+        int res=sub->read_vertex(req_arg->vertex_id,v,&num);
+        proto_vertex_num mes;
+        mes.vertex=v;
+        mes.num=num;	
+	if(res==1){		
+		rep.ans(STATUS_V_NOT_EXIST,"vertex not exist",strlen("vertex not exist")+1);
+	}
+	if(res==0){
+		rep.ans(STATUS_OK,&mes,sizeof(proto_vertex_num));	
+	}
+}
 //处理批量read边的函数，边都属于一个图
 void handler_read_two_edges(Replier &rep){
 	string graph_name=rep.get_graph_name();
@@ -117,6 +163,50 @@ void handler_read_two_edges(Replier &rep){
 	}
 	rep.ans(STATUS_OK,edges);
 }
+//处理根据属性查找边的函数
+void handler_read_edge_index(Replier &rep){
+	proto_blog_id *req_arg=(proto_blog_id*)rep.get_arg();
+	list<Edge_u> edges;//存储返回的结果
+        Key k(req_arg->blog_id);
+        Graph *graph=graph_set->get_graph(req_arg->graph_name);
+        list<Value> vs;
+        unordered_map<int,unordered_map<int,int>*> repeated;//这个map用来查重，重复的两个顶点就不用再找边了
+        unordered_map<int,unordered_map<int,int>*>::iterator it_out;
+        unordered_map<int,int>::iterator it_in;
+        list<Value>::iterator it;
+        graph->get_edge_index(k,vs);
+        for(it=vs.begin();it!=vs.end();it++){
+               v_type s_id=(*it).s_id;
+               v_type d_id=(*it).d_id;
+               //查看
+               it_out=repeated.find(s_id);
+               int flag;//0代表没有重复，1代表重复
+               if(it_out==repeated.end()){
+                    unordered_map<int,int>*tmp=new unordered_map<int,int>();
+                    (*tmp)[d_id]=1;
+                    repeated[s_id]=tmp; 
+                    flag=0;
+               }else{
+                    unordered_map<int,int>*tmp=it_out->second;
+                    if(tmp->find(d_id)==tmp->end()){
+                         flag=0;
+                         (*tmp)[d_id]=1;
+                    }else{
+                         flag=1;
+                    }
+               }
+               if(flag==0){
+                    //顶点没有重复的时候就去查找边
+                    Subgraph *sub=graph_set->get_subgraph(req_arg->graph_name,s_id);
+                    sub->read_edges(s_id,d_id,req_arg->blog_id,edges);    
+               }
+        }
+        //释放内存
+        for(it_out=repeated.begin();it_out!=repeated.end();it_out++)
+              delete it_out->second;
+	rep.ans(STATUS_OK,edges);
+}
+
 //工作线程的函数，每一个线程一个套接字
 void * worker(void* args)
 {
@@ -158,6 +248,18 @@ void * worker(void* args)
 				}
 				case CMD_READ_TWO_EDGES:{
 					handler_read_two_edges(rep);			
+					break;
+				}
+                                case CMD_READ_EDGE_INDEX:{
+					handler_read_edge_index(rep);			
+					break;
+				}
+                                case CMD_GET_ALL_VERTEX_NUM:{
+					handler_get_vertex_num(rep);			
+					break;
+				}
+                                case CMD_READ_VERTEX:{
+					handler_read_vertex(rep);			
 					break;
 				}
 			}

@@ -93,8 +93,12 @@ public:
 	b_type index_edge(Vertex* v,v_type id,b_type num,char is_hash=0);
 	//读取两个顶点之间的所有边，源顶点不存在，则会返回1，源顶点存在则返回0
 	int read_edges(v_type s_id,v_type d_id,list<Edge_u>& edges,char is_hash=0);
+        //读取两个顶点之间的指定属性的所有边，源顶点不存在，则会返回1，源顶点存在则返回0
+	int read_edges(v_type s_id,v_type d_id,char *blog_id,list<Edge_u>& edges,char is_hash=0);
 	//读取顶点所有的边，源顶点不存在，则会返回1，源顶点存在则返回0
 	int read_all_edges(v_type id,list<Edge_u>& edges,char is_hash=0);
+        //读取一个顶点信息，把顶点的边也返回
+        int read_vertex(v_type id,Vertex_u& v,uint32_t*num,char is_hash=0);
 
 	void all_vertex(char is_hash);
 	void output_edge(v_type id,char is_hash);
@@ -104,27 +108,30 @@ public:
 
 
 
-//顶点类
+//顶点类，系统内部存储的顶点类型，维护了很多顶点实际数据外的信息，暂时只有一个id是顶点所有的信息
 class Vertex{
 public:
-	v_type id;//顶点的id
-	char status;//顶点的状态，该顶点是否被删除等，0代表存在，1代表已经删除
-	uint32_t param;//顶点的属性，暂时用一个作为测试
-   	e_type size;//边的数目，没有维护
+	v_type id;//顶点的字段，顶点的id
+        char nick_name[NICKNAME_LEN+1];//顶点的字段，顶点的昵称 
+	char status;//顶点的状态，该顶点是否被删除等，0代表存在，1代表已经删除，删除操作暂时没有写
+   	e_type size;//边的数目
     	b_type head;//顶点块链表的头指针
 	b_type tail;//顶点块链表的尾指针，暂时没用到
 	b_type index;//索引块链表的头指针
 	explicit Vertex(v_type i);
 	Vertex(Vertex_u v);
+        Vertex_u to_vertex_u();
 }__attribute__((packed));
 
-//边的类
+//边的类，系统内部存储的边类型
 class Edge{
 public:
-	char status;//边的状态，有没有被删除，0代表存在，1代表已经删除
-	v_type id;//目标顶点id
-	uint32_t param;//边的属性，写一个用来测试
-	t_type timestamp;//时间戳
+	v_type id;//边的字段，目标顶点id
+	char blog_id[BLOGID_LEN+1];//边的字段，属性，固定为32个字符的空间，即最大不会超过32个字符，最后一个字符'\0'
+        int type;//边的字段，类型
+	t_type timestamp;//边的字段，时间戳
+
+	char status;//边的状态，有没有被删除，0代表存在，1代表已经删除，删除操作暂时没有写
 	Edge(Edge_u e);
 	Edge();
 	Edge_u to_edge_u(v_type s_id);	
@@ -424,6 +431,23 @@ public:
 		}
 		while(num!=INVALID_INDEX){
 			if(data[num].content.id==d_id) 
+				edges.push_back(data[num].content.to_edge_u(s_id));
+			if(data[num].content.id>d_id) 
+				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
+			num=data[num].next;
+		}
+		return flag;
+	}
+        //把该块中目标顶点是id，属性是blog_id的边存入Edge_u集合中，如果第一条边的目标顶点是id，那么返回1，否则返回0
+        //这个函数，只有边块才会调用，所以可以强制类型转换成Edge类型的块
+	int get_contents(v_type s_id,v_type d_id,char *blog_id,list<Edge_u>& edges){
+		uint32_t num=list_head;
+                int flag=0;
+		if(num!=INVALID_INDEX){
+			if(data[num].content.id==d_id) flag=1;
+		}
+		while(num!=INVALID_INDEX){
+			if((data[num].content.id==d_id)&&(strcmp(((Edge)(data[num].content)).blog_id,blog_id)==0)) 
 				edges.push_back(data[num].content.to_edge_u(s_id));
 			if(data[num].content.id>d_id) 
 				break;//内部是排序的，当边的id大于目标id时，后面就找不到相应的边了，那么退出循环 
